@@ -1,0 +1,99 @@
+# Python
+*.py[cod]
+__pycache__/
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+
+# Virtual Environment
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Django migrations
+migrations/
+!*/migrations/__init__.py
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Database files
+*.sqlite3
+*.db
+
+# Django log files
+logs/
+error_logs/
+
+# IDE files
+*.swp
+*.swo
+*.swn
+*.bak
+
+# OS-specific files
+*.tmp
+*~
+
+# Static files
+static/
+staticfiles/
+collected_static/
+
+# Media files
+uploads/
+
+# PyCharm project files
+*.iml
+*.iws
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Coverage reports
+.coverage
+*.coveragerc
+coverage/
+htmlcov/
+
+# pylint output
+pylint-report.txt
+pylint-errors.txt
+.pylintrc
+
+# VS Code
+settings.json
