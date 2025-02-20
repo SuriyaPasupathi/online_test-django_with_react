@@ -41,6 +41,7 @@ Create a `.env` file in the backend directory with the following variables:
 env
 DEBUG=True
 SECRET_KEY=your-secret-key
+DB_ENGINE=django.db.backends.mysql
 DB_NAME=your_database_name
 DB_USER=your_database_user
 DB_PASSWORD=your_database_password
