@@ -325,8 +325,6 @@ def get_test_notification(request):
     # Get the start date from the TestNotification model
     test_start_time = notification.start_date
 
-    
-
     # Compare current time with test start time
     if now < test_start_time:
         # Calculate remaining time until the test starts
