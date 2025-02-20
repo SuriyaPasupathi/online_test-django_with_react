@@ -189,3 +189,5 @@ ADMIN_EMAIL = 'pavimohan0105@gmail.com'
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:5173',  # Add your frontend URL here
 ]
+
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']

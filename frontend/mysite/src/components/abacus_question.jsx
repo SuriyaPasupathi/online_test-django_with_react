@@ -13,27 +13,20 @@ const PracticePage = () => {
     const [section, setSection] = useState(1);
     const [testCompleted, setTestCompleted] = useState(false);
     const [practiceCount, setPracticeCount] = useState(0);
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);  // To track the current question index
 
-    const token = localStorage.getItem("access_token"); // Only retrieve the token once
+    const token = localStorage.getItem("access_token");
 
     useEffect(() => {
-        // Fetch questions when the level or section changes
         fetchQuestions();
     }, [level, section]);
 
     useEffect(() => {
-        // Check if the token exists before making the request
         if (token) {
-            const data = {};  // Your practice session data (e.g., session details)
-
-            // Make the POST request using axios
-            axios.post(
-                'http://localhost:8000/api/practice-session/', 
-                data, 
-                {
-                    headers: { Authorization: `Bearer ${token}` }, // Attach token to header
-                }
-            )
+            const data = {};  // Your practice session data
+            axios.post('http://localhost:8000/api/practice-session/', data, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
             .then((response) => {
                 console.log('Practice session started:', response.data);
             })
@@ -44,7 +37,7 @@ const PracticePage = () => {
         } else {
             console.error("No token found in localStorage.");
         }
-    }, [token]); // Effect runs when `token` changes or on component mount
+    }, [token]);
 
     const fetchQuestions = () => {
         axios.get(`http://localhost:8000/api/questions/${level}/${section}/`)
@@ -72,9 +65,7 @@ const PracticePage = () => {
             answers: answers,
             total_score: totalScore,
         }, {
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
         })
         .then((response) => {
             setScore(response.data.score);
@@ -88,7 +79,6 @@ const PracticePage = () => {
                 setTotalScore(response.data.total_score);
                 setTestCompleted(true);
 
-                // Prevent moving to level 4
                 if (level < 3) {
                     setTimeout(() => {
                         setLevel(level + 1); // Move to next level
@@ -101,6 +91,33 @@ const PracticePage = () => {
         .catch((error) => {
             console.error("Error submitting answers:", error);
         });
+    };
+
+    const handlePaginationClick = (index) => {
+        setCurrentQuestionIndex(index);  // Update the current question index when a pagination button is clicked
+    };
+
+    const renderPaginationButtons = () => {
+        const totalQuestions = questions.length;
+        const paginationButtons = [];
+
+        for (let i = 0; i < totalQuestions; i++) {
+            paginationButtons.push(
+                <button
+                    key={i}
+                    onClick={() => handlePaginationClick(i)}
+                    className={`mx-1 px-3 py-1 rounded ${currentQuestionIndex === i ? "bg-blue-500 text-white" : "bg-gray-300"}`}
+                >
+                    {i + 1}
+                </button>
+            );
+        }
+
+        return (
+            <div className="text-center mt-4">
+                {paginationButtons}
+            </div>
+        );
     };
 
     return (
@@ -117,18 +134,21 @@ const PracticePage = () => {
             ) : (
                 <div className="space-y-4">
                     <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
-                    {questions.map((question) => (
-                        <div key={question.id} className="p-4 border rounded shadow">
-                            <p className="text-lg font-semibold">{question.question_text}</p>
-                            <input
-                                type="text"
-                                onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                                value={answers[question.id] || ""}
-                                className="border p-2 w-full mt-2 rounded"
-                                placeholder="Enter your answer"
-                            />
-                        </div>
-                    ))}
+
+                    {/* Show question based on pagination index */}
+                    <div key={questions[currentQuestionIndex]?.id} className="p-4 border rounded shadow">
+                        <p className="text-lg font-semibold">{questions[currentQuestionIndex]?.question_text}</p>
+                        <input
+                            type="text"
+                            onChange={(e) => handleAnswerChange(questions[currentQuestionIndex]?.id, e.target.value)}
+                            value={answers[questions[currentQuestionIndex]?.id] || ""}
+                            className="border p-2 w-full mt-2 rounded"
+                            placeholder="Enter your answer"
+                        />
+                    </div>
+
+                    {renderPaginationButtons()}  {/* Render pagination buttons */}
+
                     <button
                         onClick={handleSubmit}
                         className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
@@ -139,7 +159,6 @@ const PracticePage = () => {
                     {score !== null && (
                         <div className="mt-4 p-4 border rounded shadow bg-gray-100">
                             <p className="text-lg font-bold">Your Score: {score}</p>
-
                             {incorrectAnswers.length > 0 && (
                                 <div>
                                     <p className="text-red-500 font-semibold">Incorrect Answers:</p>
