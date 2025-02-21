@@ -253,6 +253,7 @@ def get_random_questions(request, level_id, section_id):
     serialized_questions = TestSerializer(questions, many=True)
 
     return Response(serialized_questions.data)
+
 @api_view(['POST'])
 @permission_classes([AllowAny])  # Allow public access
 def validate_answers(request, level_id, section_id):
@@ -279,18 +280,13 @@ def validate_answers(request, level_id, section_id):
             correct_answers[question.id] = question.correct_answer
 
     # Logic to determine whether to move to the next section or level
-    move_to_next_section = False
+    move_to_next_section = score >= 7  # Move to next section if 7/10 are correct
     move_to_next_level = False
 
-    # Threshold for section completion
-    if score >= 7:  # Threshold for moving to the next section (out of 10 questions)
-        move_to_next_section = True
-
-    # Check for the last level (Level 3)
-    if level_id == 3 and score >= 14:  # Example condition: score 14/20 to move to next level
+    # Move to the next level if Level 3 & Section 2 is completed with a high enough score
+    if level_id == 3 and section_id == 2 and score >= 14:
         move_to_next_level = True
 
-    # Return the score for the current section and check if we can move to the next level or section
     return Response({
         "score": score,
         "incorrect_answers": incorrect_answers,
@@ -298,7 +294,6 @@ def validate_answers(request, level_id, section_id):
         "move_to_next_section": move_to_next_section,
         "move_to_next_level": move_to_next_level
     })
-
 
 
 
