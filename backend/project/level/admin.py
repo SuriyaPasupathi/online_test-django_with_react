@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User,AbacusTest,PracticeSession,session,TestNotification
+from .models import User,AbacusTest,PracticeSession,session,TestNotification,Score
 
 
 
@@ -79,3 +79,12 @@ class TestNotificationAdmin(admin.ModelAdmin):
     date_hierarchy = 'start_date'  # Allows you to filter by date
 
 admin.site.register(TestNotification, TestNotificationAdmin)
+
+
+
+class ScoreAdmin(admin.ModelAdmin):
+    list_display = ('user', 'score', 'session_type', 'created_at')  # Fields to display in the list view
+    readonly_fields = ('score', 'user', 'session_type', 'created_at')  # Make these fields read-only
+    exclude = ('score',)  # Optionally exclude the score field from the form
+
+admin.site.register(Score, ScoreAdmin)

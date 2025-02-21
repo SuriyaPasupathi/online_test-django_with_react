@@ -87,3 +87,14 @@ class TestNotification(models.Model):
 
     def __str__(self):
         return f"Test Notification: {self.message}"
+
+
+
+class Score(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    score = models.IntegerField()
+    session_type = models.CharField(max_length=20)  # Practice, Test, etc.
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Score: {self.score} for {self.user.username} in {self.session_type}"

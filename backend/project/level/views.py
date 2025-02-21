@@ -7,7 +7,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User,AbacusTest,PracticeSession,session,TestNotification
+from .models import User,AbacusTest,PracticeSession,session,TestNotification,Score
 from rest_framework import status 
 from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
@@ -19,10 +19,11 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .serializers import TestSerializer
+from .serializers import TestSerializer,ScoreSerializer
 import random
+from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from datetime import datetime
+
 
 
 # Set up logger
@@ -335,3 +336,34 @@ def get_test_notification(request):
         "start_time": test_start_time.isoformat(),
         "start_message": "Test is now available!"
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@login_required
+def record_score(request, session_type):
+    # Check if the score is in the POST data
+    if 'score' not in request.data:
+        return Response({'error': 'Score is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    score = request.data['score']  # Get the score from the request
+    user = request.user  # Get the current logged-in user
+
+    # Create a new Score instance with the provided session_type and user
+    score_record = Score(user=user, score=score, session_type=session_type)
+
+    # Use the serializer to validate and save the score data
+    serializer = ScoreSerializer(score_record, data=request.data)
+    
+    if serializer.is_valid():
+        serializer.save()  # Save the score to the database
+        return Response({
+            'message': 'Score recorded successfully!',
+            'score': serializer.data['score'],
+            'session_type': serializer.data['session_type'],
+            'user': user.username
+        }, status=status.HTTP_201_CREATED)
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+    

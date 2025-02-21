@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from .models import  AbacusTest,PracticeSession
+from .models import  AbacusTest,PracticeSession,Score
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -52,3 +52,10 @@ class TestSerializer(serializers.ModelSerializer):
     class Meta:
         model = AbacusTest
         fields = ['id', 'question_text']  # Ensure correct fields
+
+
+
+class ScoreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Score
+        fields = ['user', 'score', 'session_type', 'created_at']
