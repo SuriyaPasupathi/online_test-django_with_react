@@ -4,175 +4,171 @@ import axios from "axios";
 const PracticePage = () => {
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
-    const [score, setScore] = useState(null);
-    const [incorrectAnswers, setIncorrectAnswers] = useState([]);
+    const [incorrectAnswers, setIncorrectAnswers] = useState({});
     const [correctAnswers, setCorrectAnswers] = useState({});
-    const [sectionScore, setSectionScore] = useState(null);
-    const [totalScore, setTotalScore] = useState(0);
-    const [level, setLevel] = useState(1);
+    const [totalQuestions, setTotalQuestions] = useState(0);
+    const [level, setLevel] = useState(null);
     const [section, setSection] = useState(1);
     const [testCompleted, setTestCompleted] = useState(false);
-    const [practiceCount, setPracticeCount] = useState(0);
-    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);  // To track the current question index
-
-    const token = localStorage.getItem("access_token");
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
     useEffect(() => {
-        fetchQuestions();
-    }, [level, section]);
-
-    useEffect(() => {
-        if (token) {
-            const data = {};  // Your practice session data
-            axios.post('http://localhost:8000/api/practice-session/', data, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-            .then((response) => {
-                console.log('Practice session started:', response.data);
-            })
-            .catch((error) => {
-                console.error("Error tracking practice session:", error.response ? error.response.data : error);
-                alert(`Error: ${error.response ? error.response.data : error}`);
-            });
-        } else {
-            console.error("No token found in localStorage.");
+        if (level !== null) {
+            fetchQuestions();
         }
-    }, [token]);
+    }, [level, section]);
 
     const fetchQuestions = () => {
         axios.get(`http://localhost:8000/api/questions/${level}/${section}/`)
             .then((response) => {
                 setQuestions(response.data.questions);
+                setTotalQuestions((prev) => prev + response.data.questions.length);
                 setAnswers({});
-                setScore(null);
-                setIncorrectAnswers([]);
-                setCorrectAnswers({});
+                setIncorrectAnswers((prev) => ({ ...prev, [section]: {} }));
+                setCorrectAnswers((prev) => ({ ...prev, [section]: {} }));
+                setCurrentQuestionIndex(0);
             })
-            .catch((error) => {
-                console.error("Error fetching questions:", error);
-            });
+            .catch((error) => console.error("Error fetching questions:", error));
     };
 
     const handleAnswerChange = (questionId, value) => {
-        setAnswers((prevAnswers) => ({
-            ...prevAnswers,
+        setAnswers((prev) => ({
+            ...prev,
             [questionId]: value,
         }));
     };
 
     const handleSubmit = () => {
-        axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, {
-            answers: answers,
-            total_score: totalScore,
-        }, {
+        axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers }, {
             headers: { "Content-Type": "application/json" },
         })
         .then((response) => {
-            setScore(response.data.score);
-            setIncorrectAnswers(response.data.incorrect_answers);
-            setCorrectAnswers(response.data.correct_answers);
+            const incorrect = response.data.incorrect_answers;
+            const correct = response.data.correct_answers; // Get correct answers from the backend
 
-            if (response.data.move_to_next_section) {
-                setSectionScore(response.data.score);
-                setTimeout(() => setSection(2), 2000); // Move to Section 2
-            } else if (response.data.move_to_next_level) {
-                setTotalScore(response.data.total_score);
+            setIncorrectAnswers((prev) => ({
+                ...prev,
+                [section]: incorrect
+            }));
+
+            setCorrectAnswers((prev) => ({
+                ...prev,
+                [section]: correct
+            }));
+
+            // Move to the next section or complete the test
+            if (section === 1) {
+                setSection(2);
+            } else {
                 setTestCompleted(true);
-
-                if (level < 3) {
-                    setTimeout(() => {
-                        setLevel(level + 1); // Move to next level
-                        setSection(1); // Start from Section 1 in the next level
-                        setTestCompleted(false);
-                    }, 3000); // Move to next level after showing total score
-                }
             }
         })
-        .catch((error) => {
-            console.error("Error submitting answers:", error);
-        });
+        .catch((error) => console.error("Error submitting answers:", error));
     };
 
-    const handlePaginationClick = (index) => {
-        setCurrentQuestionIndex(index);  // Update the current question index when a pagination button is clicked
+    const handleLevelChange = (selectedLevel) => {
+        setLevel(selectedLevel);
+        setSection(1);
+        setTestCompleted(false);
+        setTotalQuestions(0);
+        setIncorrectAnswers({});
+        setCorrectAnswers({});
     };
 
-    const renderPaginationButtons = () => {
-        const totalQuestions = questions.length;
-        const paginationButtons = [];
-
-        for (let i = 0; i < totalQuestions; i++) {
-            paginationButtons.push(
-                <button
-                    key={i}
-                    onClick={() => handlePaginationClick(i)}
-                    className={`mx-1 px-3 py-1 rounded ${currentQuestionIndex === i ? "bg-blue-500 text-white" : "bg-gray-300"}`}
-                >
-                    {i + 1}
-                </button>
-            );
-        }
-
-        return (
-            <div className="text-center mt-4">
-                {paginationButtons}
-            </div>
-        );
+    const handleBack = () => {
+        setLevel(null);
+        setTestCompleted(false);
+        setTotalQuestions(0);
+        setSection(1);
+        setIncorrectAnswers({});
+        setCorrectAnswers({});
     };
+
+    // Calculate correct answers count
+    const correctCount = totalQuestions - Object.values(incorrectAnswers).reduce((sum, sec) => sum + Object.keys(sec).length, 0);
 
     return (
         <div className="container mx-auto p-4">
             <h1 className="text-2xl font-bold mb-4 text-center">Abacus Test</h1>
-            <p className="text-center text-lg font-semibold">You've practiced {practiceCount} times.</p>
 
-            {testCompleted ? (
-                <div className="p-6 border rounded shadow bg-gray-100 text-center">
-                    <h2 className="text-xl font-bold">Level {level - 1} Completed</h2>
-                    <p className="text-lg text-green-600">Total Score: {totalScore} / 20</p>
-                    <p className="text-blue-500">Moving to Level {level}...</p>
+            {level === null ? (
+                <div className="mb-4 text-center">
+                    {[1, 2, 3].map((lvl) => (
+                        <button 
+                            key={lvl} 
+                            onClick={() => handleLevelChange(lvl)} 
+                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mr-2"
+                        >
+                            Level {lvl}
+                        </button>
+                    ))}
                 </div>
-            ) : (
+            ) : !testCompleted ? (
                 <div className="space-y-4">
                     <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
-
-                    {/* Show question based on pagination index */}
-                    <div key={questions[currentQuestionIndex]?.id} className="p-4 border rounded shadow">
-                        <p className="text-lg font-semibold">{questions[currentQuestionIndex]?.question_text}</p>
-                        <input
-                            type="text"
-                            onChange={(e) => handleAnswerChange(questions[currentQuestionIndex]?.id, e.target.value)}
-                            value={answers[questions[currentQuestionIndex]?.id] || ""}
-                            className="border p-2 w-full mt-2 rounded"
-                            placeholder="Enter your answer"
-                        />
+                    
+                    <div className="flex justify-center space-x-2 mb-4">
+                        {questions.map((_, index) => (
+                            <button 
+                                key={index} 
+                                onClick={() => setCurrentQuestionIndex(index)} 
+                                className={`px-3 py-1 rounded ${index === currentQuestionIndex ? 'bg-blue-600 text-white' : 'bg-gray-300'}`}
+                            >
+                                {index + 1}
+                            </button>
+                        ))}
                     </div>
-
-                    {renderPaginationButtons()}  {/* Render pagination buttons */}
-
-                    <button
-                        onClick={handleSubmit}
-                        className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
-                    >
-                        Submit {section === 1 ? "Section 1" : "Section 2"}
-                    </button>
-
-                    {score !== null && (
-                        <div className="mt-4 p-4 border rounded shadow bg-gray-100">
-                            <p className="text-lg font-bold">Your Score: {score}</p>
-                            {incorrectAnswers.length > 0 && (
-                                <div>
-                                    <p className="text-red-500 font-semibold">Incorrect Answers:</p>
-                                    <ul className="list-disc list-inside">
-                                        {incorrectAnswers.map((questionId, index) => (
-                                            <li key={index} className="text-red-500">
-                                                Q{questionId} - Correct: {correctAnswers[questionId]}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
+                    
+                    {questions.length > 0 && (
+                        <div key={questions[currentQuestionIndex].id} className="p-4 border rounded shadow">
+                            <p className="text-lg font-semibold">{questions[currentQuestionIndex].question_text}</p>
+                            <input
+                                type="text"
+                                onChange={(e) => handleAnswerChange(questions[currentQuestionIndex].id, e.target.value)}
+                                value={answers[questions[currentQuestionIndex].id] || ""}
+                                className="border p-2 w-full mt-2 rounded"
+                                placeholder="Enter your answer"
+                            />
                         </div>
                     )}
+                    
+                    {Object.keys(answers).length === questions.length && (
+                        <button 
+                            onClick={handleSubmit} 
+                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+                        >
+                            Submit Section {section}
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className="p-6 border rounded shadow bg-gray-100 text-center">
+                    <h2 className="text-xl font-bold">Level {level} Completed</h2>
+
+                    <p className="text-lg text-green-600">
+                        Correct Answers: {correctCount} / {totalQuestions}
+                    </p>
+
+                    {[1, 2].map((sec) => (
+                        <div key={sec} className="mt-4">
+                            <h2 className="text-xl font-semibold">Section {sec} Incorrect Answers</h2>
+                            {incorrectAnswers[sec] && Object.keys(incorrectAnswers[sec]).length > 0 ? (
+                                Object.entries(incorrectAnswers[sec]).map(([questionId, userAnswer]) => (
+                                    <div key={questionId} className="p-4 border rounded shadow">
+                                        <p className="text-red-500">❌ Your Answer: {userAnswer}</p>
+                                        <p className="text-green-500">✔ Correct Answer: {correctAnswers[sec][questionId]}</p>
+                                    </div>
+                                ))
+                            ) : <p className="text-gray-600">No incorrect answers!</p>}
+                        </div>
+                    ))}
+                    
+                    <button 
+                        onClick={handleBack} 
+                        className="mt-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                    >
+                        Back
+                    </button>
                 </div>
             )}
         </div>
@@ -180,3 +176,7 @@ const PracticePage = () => {
 };
 
 export default PracticePage;
+
+
+
+

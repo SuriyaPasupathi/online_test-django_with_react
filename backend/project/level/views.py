@@ -154,68 +154,63 @@ class GetQuestionsView(View):
         questions_data = [{"id": question.id, "question_text": question.question_text} for question in questions]
 
         return JsonResponse({"questions": questions_data}, status=200)
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class SubmitAnswersView(View):
     def post(self, request, level_id, section_id, *args, **kwargs):
         try:
-            # Parse the JSON request body
             data = json.loads(request.body)
-
-            answers = data.get('answers')  # Extract 'answers' dictionary
-            total_score = data.get('total_score', 0)  # Extract 'total_score' (for section completion)
+            answers = data.get('answers', {})
 
             if not answers:
                 return JsonResponse({"error": "No answers provided."}, status=400)
 
             correct_count = 0
-            incorrect_answers = {}  # Stores question IDs with their correct answers
-            correct_answers = {}  # Stores correct answers mapped by question ID
+            incorrect_answers = {}
+            correct_answers = {}
+
+            # Fetch all questions for this level and section
+            questions = AbacusTest.objects.filter(level=level_id, section=section_id)
+            total_questions = questions.count()  # Get the exact number of questions posted by admin
 
             # Validate submitted answers
-            for question_id, user_answer in answers.items():
-                try:
-                    # Fetch question for the given level and section
-                    question = AbacusTest.objects.get(id=question_id, level=level_id, section=section_id)
-                    # Compare answer
-                    if str(question.correct_answer) == str(user_answer).strip():
-                        correct_count += 1
-                    else:
-                        # Store incorrect answers with their correct values
-                        incorrect_answers[question_id] = question.correct_answer
-                        correct_answers[question_id] = question.correct_answer  # Mapping the correct answers
-                except AbacusTest.DoesNotExist:
-                    continue  # Ignore missing questions (if any)
+            for question in questions:
+                question_id = str(question.id)
+                user_answer = answers.get(question_id, "").strip()
+                if user_answer == str(question.correct_answer).strip():
+                    correct_count += 1
+                else:
+                    incorrect_answers[question_id] = user_answer
+                    correct_answers[question_id] = question.correct_answer
 
-            # Calculate score (correct_count/total_questions)
-            total_questions = len(answers)
             score = f"{correct_count}/{total_questions}"
 
-            # Logic for Section 2: Calculate the total score and move to the next level
+            # If it's the second section, return total results
             if section_id == 2:
-                total_score += correct_count  # Combine total score from Section 1 and Section 2
                 return JsonResponse({
                     "score": score,
-                    "total_score": total_score,
-                    "incorrect_answers": incorrect_answers,
+                    "total_score": correct_count,  # Final total score
+                    "incorrect_answers": incorrect_answers,  # Retain incorrect answers from both sections
                     "correct_answers": correct_answers,
-                    "move_to_next_level": True,  # Indicate transition to next level
+                    "move_to_next_level": True,
                 }, status=200)
 
-            # Logic for Section 1: Move to Section 2
-            if section_id == 1:
-                return JsonResponse({
-                    "score": score,
-                    "incorrect_answers": incorrect_answers,
-                    "correct_answers": correct_answers,
-                    "move_to_next_section": True,  # Indicate transition to next section
-                }, status=200)
-
-            return JsonResponse({"error": "Invalid section or level."}, status=400)
+            # If Section 1 is completed, pass incorrect answers to Section 2
+            return JsonResponse({
+                "score": score,
+                "total_score": correct_count,  # Accumulate score for Section 2
+                "incorrect_answers": incorrect_answers,
+                "correct_answers": correct_answers,
+                "move_to_next_section": True,
+            }, status=200)
 
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON format."}, status=400)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
+
+
 class PracticeSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
