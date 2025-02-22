@@ -7,7 +7,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User,AbacusTest,PracticeSession,session,TestNotification,Score
+from .models import User,AbacusTest,PracticeSession,session,TestNotification
 from rest_framework import status 
 from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
@@ -19,23 +19,17 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .serializers import TestSerializer,ScoreSerializer
+from .serializers import TestSerializer
 import random
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from .utils import get_tokens_for_user
+
 
 
 
 # Set up logger
 logger = logging.getLogger(__name__)
-
-# Function to generate JWT tokens
-def get_tokens_for_user(user):
-    refresh = RefreshToken.for_user(user)
-    return {
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-    }
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]  # Allow any user (unauthenticated)
@@ -49,18 +43,22 @@ class RegisterView(APIView):
             email = data.get('email')
             password = data.get('password')
 
-            # Validate input
+            # Validate input - Ensure necessary fields are provided
             if not username or not email or not password:
+                logger.warning("Missing required fields in registration data.")
                 return Response({'message': 'Username, email, and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
             if '@' not in email:
+                logger.warning(f"Invalid email format: {email}")
                 return Response({'message': 'Invalid email format.'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Check if username or email is already taken
             if User.objects.filter(username=username).exists():
+                logger.warning(f"Username already taken: {username}")
                 return Response({'message': 'Username already taken.'}, status=status.HTTP_400_BAD_REQUEST)
 
             if User.objects.filter(email=email).exists():
+                logger.warning(f"Email already registered: {email}")
                 return Response({'message': 'Email already registered.'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Create inactive user
@@ -68,35 +66,31 @@ class RegisterView(APIView):
             user = User(username=username, email=email, password=hashed_password, is_active=False)  
             user.save()
 
-            # Generate JWT token for new user (we're sending it after registration for easy user identification)
-            tokens = self.get_tokens_for_user(user)
+            # Generate JWT token for new user
+            tokens = get_tokens_for_user(user)
 
             # Notify admin for approval
-            send_mail(
-                'New User Registration',
-                f'A new user has registered: {username} ({email}). Please approve them.',
-                settings.DEFAULT_FROM_EMAIL,
-                [settings.ADMIN_EMAIL],  
-            )
+            try:
+                send_mail(
+                    'New User Registration',
+                    f'A new user has registered: {username} ({email}). Please approve them.',
+                    settings.DEFAULT_FROM_EMAIL,
+                    [settings.ADMIN_EMAIL],  # Ensure this is a valid admin email
+                )
+                logger.info(f"Admin notified about new user: {username} ({email})")
+            except Exception as email_error:
+                logger.error(f"Error sending email notification: {str(email_error)}")
+                return Response({'message': 'Registration successful, but failed to notify admin. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             return Response({
                 'message': 'Registration successful. Please wait for admin approval.',
                 'access_token': tokens['access'],  # Send JWT access token as part of response
                 'refresh_token': tokens['refresh']  # Send JWT refresh token as part of response
             }, status=status.HTTP_201_CREATED)
-        
+
         except Exception as e:
             logger.error(f"Error during registration: {str(e)}")
             return Response({'message': 'Something went wrong. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def get_tokens_for_user(self, user):
-        """Generate JWT access and refresh tokens."""
-        refresh = RefreshToken.for_user(user)
-        return {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-        }
-
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
@@ -211,7 +205,6 @@ class SubmitAnswersView(View):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
-
 class PracticeSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -221,21 +214,31 @@ class PracticeSessionView(APIView):
             session = PracticeSession.objects.get(user=request.user)
             return Response({
                 "session_count": session.session_count,
-                "last_practiced": session.last_practiced
+                "last_practiced": session.last_practiced,
+                "score": session.score  # Include the score here
             }, status=status.HTTP_200_OK)
         except PracticeSession.DoesNotExist:
             return Response({"message": "No practice session found!"}, status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request):
-        """Increment session count when the user practices."""
+        """Increment session count when the user practices and update score."""
         session, created = PracticeSession.objects.get_or_create(user=request.user)
+        
+        # Increment the session count
         session.session_count += 1
+        
+        # Update the score (assuming you get the score from the frontend)
+        score_from_frontend = request.data.get("score", 0)  # Get score from frontend
+        session.score = score_from_frontend  # Update the score in the session object
+
+        # Save the session object with updated values
         session.save()
 
         return Response({
             "message": "Practice session updated!",
             "session_count": session.session_count,
-            "last_practiced": session.last_practiced
+            "last_practiced": session.last_practiced,
+            "score": session.score  # Return updated score as well
         }, status=status.HTTP_200_OK)
     
 
@@ -260,7 +263,7 @@ def get_random_questions(request, level_id, section_id):
 def validate_answers(request, level_id, section_id):
     """
     Validate the answers submitted by the user for a specific level and section.
-    Return the score based on correct answers.
+    Return the score based on correct answers, and update the user's practice session score.
     """
     answers = request.data.get('answers', {})
 
@@ -272,6 +275,7 @@ def validate_answers(request, level_id, section_id):
     incorrect_answers = []
     correct_answers = {}
 
+    # Iterate through each question and check the user's answer
     for question in questions:
         user_answer = answers.get(str(question.id), "").strip().lower()
         if user_answer == question.correct_answer.strip().lower():
@@ -288,6 +292,14 @@ def validate_answers(request, level_id, section_id):
     if level_id == 3 and section_id == 2 and score >= 14:
         move_to_next_level = True
 
+    # Update the score in the user's PracticeSession
+    user = request.user  # Assuming the user is authenticated
+    session, created = PracticeSession.objects.get_or_create(user=user)
+
+    # Add score to the session (you can adjust this logic as needed)
+    session.score += score
+    session.save()
+
     return Response({
         "score": score,
         "incorrect_answers": incorrect_answers,
@@ -295,7 +307,6 @@ def validate_answers(request, level_id, section_id):
         "move_to_next_section": move_to_next_section,
         "move_to_next_level": move_to_next_level
     })
-
 
 
 @api_view(['GET'])
@@ -338,32 +349,3 @@ def get_test_notification(request):
     }, status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-@login_required
-def record_score(request, session_type):
-    # Check if the score is in the POST data
-    if 'score' not in request.data:
-        return Response({'error': 'Score is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    score = request.data['score']  # Get the score from the request
-    user = request.user  # Get the current logged-in user
-
-    # Create a new Score instance with the provided session_type and user
-    score_record = Score(user=user, score=score, session_type=session_type)
-
-    # Use the serializer to validate and save the score data
-    serializer = ScoreSerializer(score_record, data=request.data)
-    
-    if serializer.is_valid():
-        serializer.save()  # Save the score to the database
-        return Response({
-            'message': 'Score recorded successfully!',
-            'score': serializer.data['score'],
-            'session_type': serializer.data['session_type'],
-            'user': user.username
-        }, status=status.HTTP_201_CREATED)
-    else:
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-
-    

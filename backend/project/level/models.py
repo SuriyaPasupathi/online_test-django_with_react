@@ -49,14 +49,18 @@ class AbacusTest(models.Model):
     section = models.IntegerField(choices=SECTION_CHOICES)
     question_text = models.CharField(max_length=100)
     correct_answer = models.CharField(max_length=10)
+   
 
     def __str__(self):
         return f"Level {self.level}, Section {self.section} - {self.question_text}"
+    
+
     
 class PracticeSession(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     session_count = models.PositiveIntegerField(default=0)  # Counts practice attempts
     last_practiced = models.DateTimeField(auto_now=True)  # Stores last practice time
+    score = models.IntegerField(default=0)  # Added the score field
 
    
 
@@ -90,11 +94,3 @@ class TestNotification(models.Model):
 
 
 
-class Score(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    score = models.IntegerField()
-    session_type = models.CharField(max_length=20)  # Practice, Test, etc.
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Score: {self.score} for {self.user.username} in {self.session_type}"

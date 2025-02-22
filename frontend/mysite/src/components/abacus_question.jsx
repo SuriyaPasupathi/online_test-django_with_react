@@ -11,10 +11,12 @@ const PracticePage = () => {
     const [section, setSection] = useState(1);
     const [testCompleted, setTestCompleted] = useState(false);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const [practiceCount, setPracticeCount] = useState(0); // Track practice count
 
     useEffect(() => {
         if (level !== null) {
             fetchQuestions();
+            fetchPracticeCount(); // Fetch practice count on level change
         }
     }, [level, section]);
 
@@ -31,6 +33,20 @@ const PracticePage = () => {
             .catch((error) => console.error("Error fetching questions:", error));
     };
 
+    const fetchPracticeCount = () => {
+        // Fetch the practice count for the current user
+        const token = localStorage.getItem("auth_token");
+        axios.get("http://localhost:8000/api/practice-session/", {
+            headers: {
+                "Authorization": `Bearer ${token}`,
+            },
+        })
+        .then((response) => {
+            setPracticeCount(response.data.session_count); // Set the practice count
+        })
+        .catch((error) => console.error("Error fetching practice count:", error));
+    };
+
     const handleAnswerChange = (questionId, value) => {
         setAnswers((prev) => ({
             ...prev,
@@ -39,12 +55,21 @@ const PracticePage = () => {
     };
 
     const handleSubmit = () => {
-        axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers }, {
-            headers: { "Content-Type": "application/json" },
+        const score = correctCount;  // Calculate the score based on correct answers
+
+        // Get the token (assume it's stored in localStorage or cookies)
+        const token = localStorage.getItem("auth_token");
+
+        // Send the score to the backend with the token
+        axios.post(`http://localhost:8000/api/practice-session/`, { score }, {
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            },
         })
         .then((response) => {
             const incorrect = response.data.incorrect_answers;
-            const correct = response.data.correct_answers; // Get correct answers from the backend
+            const correct = response.data.correct_answers;
 
             setIncorrectAnswers((prev) => ({
                 ...prev,
@@ -58,10 +83,13 @@ const PracticePage = () => {
 
             // Move to the next section or complete the test
             if (section === 1) {
-                setSection(2);
+                setSection(2);  // Move to section 2
+                fetchQuestions(); // Fetch the new questions for section 2
             } else {
-                setTestCompleted(true);
+                setTestCompleted(true); // Test is completed
             }
+
+            fetchPracticeCount(); // Update practice count after submitting answers
         })
         .catch((error) => console.error("Error submitting answers:", error));
     };
@@ -106,7 +134,11 @@ const PracticePage = () => {
             ) : !testCompleted ? (
                 <div className="space-y-4">
                     <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
-                    
+
+                    <div className="text-center mb-4">
+                        <p>Practice Count: {practiceCount}</p>
+                    </div>
+
                     <div className="flex justify-center space-x-2 mb-4">
                         {questions.map((_, index) => (
                             <button 
@@ -118,7 +150,7 @@ const PracticePage = () => {
                             </button>
                         ))}
                     </div>
-                    
+
                     {questions.length > 0 && (
                         <div key={questions[currentQuestionIndex].id} className="p-4 border rounded shadow">
                             <p className="text-lg font-semibold">{questions[currentQuestionIndex].question_text}</p>
@@ -131,7 +163,7 @@ const PracticePage = () => {
                             />
                         </div>
                     )}
-                    
+
                     {Object.keys(answers).length === questions.length && (
                         <button 
                             onClick={handleSubmit} 
@@ -162,7 +194,7 @@ const PracticePage = () => {
                             ) : <p className="text-gray-600">No incorrect answers!</p>}
                         </div>
                     ))}
-                    
+
                     <button 
                         onClick={handleBack} 
                         className="mt-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
@@ -176,12 +208,6 @@ const PracticePage = () => {
 };
 
 export default PracticePage;
-
-
-
-
-
-
 
 
 

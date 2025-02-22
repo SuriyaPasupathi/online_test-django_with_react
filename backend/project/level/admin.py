@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User,AbacusTest,PracticeSession,session,TestNotification,Score
+from .models import User,AbacusTest,PracticeSession,session,TestNotification
 
 
 
@@ -40,14 +40,16 @@ admin.site.register(User, UserAdmin)
 
 @admin.register(AbacusTest)
 class AbacusTestAdmin(admin.ModelAdmin):
-    list_display = ('level', 'section', 'question_text', 'correct_answer')
+    list_display = ('level', 'section', 'question_text', 'correct_answer')  # Added score field
     list_filter = ('level', 'section')
     search_fields = ('question_text',)
 
 
+
+
 class PracticeSessionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'session_count', 'last_practiced')
-    readonly_fields = ('user', 'session_count', 'last_practiced')
+    list_display = ('user', 'session_count', 'last_practiced','score')
+    readonly_fields = ('user', 'session_count', 'last_practiced','score')
     search_fields = ('user__username',)
 
     def has_change_permission(self, request, obj=None):
@@ -82,9 +84,3 @@ admin.site.register(TestNotification, TestNotificationAdmin)
 
 
 
-class ScoreAdmin(admin.ModelAdmin):
-    list_display = ('user', 'score', 'session_type', 'created_at')  # Fields to display in the list view
-    readonly_fields = ('score', 'user', 'session_type', 'created_at')  # Make these fields read-only
-    exclude = ('score',)  # Optionally exclude the score field from the form
-
-admin.site.register(Score, ScoreAdmin)

@@ -11,6 +11,8 @@ urlpatterns = [
     path('api/random_question/<int:level_id>/<int:section_id>/', get_random_questions, name='get_random_questions'),
     path('api/validate_answers/<int:level_id>/<int:section_id>/', validate_answers, name='validate_answers'),
     path('api/test_notification/', get_test_notification, name='get_test_notification'),
+    
+    
 ]
 
 
