@@ -1,5 +1,5 @@
 import logging
-from django.shortcuts import get_object_or_404
+
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
@@ -16,14 +16,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
 from django.views import View
-from django.views.decorators.cache import never_cache
+from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .serializers import TestSerializer
 import random
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate
 from django.utils import timezone
 from .utils import get_tokens_for_user
+
 
 
 
@@ -96,19 +97,22 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        # Authenticate the user (this is just an example)
-        username = request.data.get('username')
-        password = request.data.get('password')
+        username = request.data.get("username")
+        password = request.data.get("password")
 
-        # Validate user credentials (you may want to use Django's built-in authentication system here)
+        # Authenticate the user
         user = authenticate(username=username, password=password)
+
         if user is not None:
             # Generate JWT token
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
 
-            return Response({"access_token": access_token})
-        return Response({"detail": "Invalid credentials"}, status=400)
+            return Response({"access_token": access_token}, status=status.HTTP_200_OK)
+
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+
+
 @api_view(['POST'])
 def approve_user(request):
     """ Admin approves user and activates their account. """
@@ -205,42 +209,44 @@ class SubmitAnswersView(View):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
+# Initialize logger
+
+logger = logging.getLogger(__name__)
+
 class PracticeSessionView(APIView):
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]  # or TokenAuthentication based on your setup
+    permission_classes = [IsAuthenticated]  # Ensure only logged-in users can access
 
     def get(self, request):
         """Retrieve the user's practice session details."""
-        try:
-            session = PracticeSession.objects.get(user=request.user)
+        logger.info(f"Authorization header: {request.headers.get('Authorization')}")  # Log the Authorization header
+
+        session = PracticeSession.objects.filter(user=request.user).first()
+        
+        if session:
             return Response({
                 "session_count": session.session_count,
                 "last_practiced": session.last_practiced,
-                "score": session.score  # Include the score here
+                "score": session.score  # Include score in response
             }, status=status.HTTP_200_OK)
-        except PracticeSession.DoesNotExist:
-            return Response({"message": "No practice session found!"}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({"message": "No practice session found!"}, status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request):
-        """Increment session count when the user practices and update score."""
-        session, created = PracticeSession.objects.get_or_create(user=request.user)
-        
-        # Increment the session count
-        session.session_count += 1
-        
-        # Update the score (assuming you get the score from the frontend)
-        score_from_frontend = request.data.get("score", 0)  # Get score from frontend
-        session.score = score_from_frontend  # Update the score in the session object
+        """Increment session count and update score when the user practices."""
+        logger.info(f"User authenticated: {request.user.is_authenticated}")  # Log user authentication status
 
-        # Save the session object with updated values
+        session, created = PracticeSession.objects.get_or_create(user=request.user)
+        session.session_count += 1
+        session.score += request.data.get("score", 0)
         session.save()
 
         return Response({
             "message": "Practice session updated!",
             "session_count": session.session_count,
             "last_practiced": session.last_practiced,
-            "score": session.score  # Return updated score as well
+            "score": session.score
         }, status=status.HTTP_200_OK)
-    
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow public access

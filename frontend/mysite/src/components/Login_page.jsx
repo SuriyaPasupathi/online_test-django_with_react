@@ -12,7 +12,7 @@ const Login = () => {
         setErrorMessage('');
 
         try {
-            // Replacing axios with fetch
+            // Make the POST request to the backend for login
             const response = await fetch('http://127.0.0.1:8000/api/login/', {
                 method: 'POST',
                 headers: {
@@ -22,16 +22,23 @@ const Login = () => {
             });
 
             const data = await response.json();
+
             if (response.status === 200 && data.access_token) {
+                // Store the access and refresh tokens in localStorage for future use
                 localStorage.setItem('access_token', data.access_token);
                 localStorage.setItem('refresh_token', data.refresh_token);
-                window.location.href = '/Home'; // Redirect to home page
+
+                // Redirect the user to the home page after a successful login
+                window.location.href = '/Home';
             } else {
+                // Display error message if login fails
                 setErrorMessage(data.message || 'Invalid credentials.');
             }
         } catch (error) {
+            // Catch any errors and display them
             setErrorMessage('Something went wrong. Please try again.');
         } finally {
+            // Stop loading spinner
             setLoading(false);
         }
     };
@@ -44,7 +51,9 @@ const Login = () => {
                 </h2>
                 <form onSubmit={handleLogin}>
                     <div className="mb-6">
-                        <label htmlFor="username" className="block text-lg text-gray-600">Username</label>
+                        <label htmlFor="username" className="block text-lg text-gray-600">
+                            Username
+                        </label>
                         <input
                             type="text"
                             id="username"
@@ -56,7 +65,9 @@ const Login = () => {
                         />
                     </div>
                     <div className="mb-6">
-                        <label htmlFor="password" className="block text-lg text-gray-600">Password</label>
+                        <label htmlFor="password" className="block text-lg text-gray-600">
+                            Password
+                        </label>
                         <input
                             type="password"
                             id="password"

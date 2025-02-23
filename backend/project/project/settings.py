@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'rest_framework.authtoken',
      
     'level', 
 ]
@@ -65,24 +66,19 @@ AUTH_USER_MODEL = 'level.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-            
-        
+      'rest_framework_simplejwt.authentication.JWTAuthentication',
+
     ],
-      'DEFAULT_RENDERER_CLASSES': [
+    'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
     ],
-
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
-         'rest_framework.permissions.AllowAny',
     ],
-   
+
     
 }
 CORS_ALLOW_ALL_ORIGINS = True
