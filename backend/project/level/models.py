@@ -60,6 +60,7 @@ class PracticeSession(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     session_count = models.PositiveIntegerField(default=0)  # Counts practice attempts
     last_practiced = models.DateTimeField(auto_now=True)  # Stores last practice time
+
     score = models.IntegerField(default=0)  # Added the score field
 
    

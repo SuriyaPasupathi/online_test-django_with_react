@@ -109,7 +109,7 @@ class LoginView(APIView):
             access_token = str(refresh.access_token)
 
             return Response({"access_token": access_token}, status=status.HTTP_200_OK)
-
+        
         return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -221,13 +221,16 @@ class PracticeSessionView(APIView):
         """Retrieve the user's practice session details."""
         logger.info(f"Authorization header: {request.headers.get('Authorization')}")  # Log the Authorization header
 
-        session = PracticeSession.objects.filter(user=request.user).first()
-        
+        # Retrieve the latest session (session without level info)
+        session = PracticeSession.objects.filter(user=request.user).order_by('-last_practiced').first()
+
         if session:
+            # Returning user's session details without storing level in the model
             return Response({
                 "session_count": session.session_count,
                 "last_practiced": session.last_practiced,
-                "score": session.score  # Include score in response
+                "score": session.score,  # Include score in response
+                "level_score": self.get_level_score(request.user)  # Fetch user's dynamic level score
             }, status=status.HTTP_200_OK)
         
         return Response({"message": "No practice session found!"}, status=status.HTTP_404_NOT_FOUND)
@@ -236,17 +239,58 @@ class PracticeSessionView(APIView):
         """Increment session count and update score when the user practices."""
         logger.info(f"User authenticated: {request.user.is_authenticated}")  # Log user authentication status
 
+        level = request.data.get("level")  # Get level from the request body
+        score = request.data.get("score", 0)  # Get score from the request body
+
+        # Ensure level is valid
+        if not level in [1, 2, 3]:
+            return Response({"error": "Invalid level"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update the session or create new (without level-specific field)
         session, created = PracticeSession.objects.get_or_create(user=request.user)
         session.session_count += 1
-        session.score += request.data.get("score", 0)
+        session.score += score
         session.save()
+
+        # Dynamically calculate level score based on the level passed in the request
+        level_score = self.update_level_score(request.user, level, score)  # Update level score dynamically
 
         return Response({
             "message": "Practice session updated!",
             "session_count": session.session_count,
             "last_practiced": session.last_practiced,
-            "score": session.score
+            "score": session.score,
+            "level_score": level_score  # Include dynamically calculated level score
         }, status=status.HTTP_200_OK)
+
+    def get_level_score(self, user):
+        """Helper method to fetch user's dynamic score per level."""
+        # No need to store level in the model, just calculate based on existing data
+        level_scores = {}
+        levels = [1, 2, 3]  # These are the valid levels
+        
+        for level in levels:
+            level_scores[level] = self.get_dynamic_level_score(user, level)  # Dynamically calculate level score
+
+        return level_scores
+
+    def get_dynamic_level_score(self, user, level):
+        """Dynamically calculate score based on level (no level field in model)."""
+        # Dummy logic: Just return the score based on the user's practice sessions for the level
+        session = PracticeSession.objects.filter(user=user).first()  # Get the user's latest session
+        if session:
+            return session.score  # Here, you can adjust how you calculate level scores dynamically
+        return 0
+
+    def update_level_score(self, user, level, score):
+        """Helper method to update user's score for a specific level dynamically."""
+        # Just return updated score without creating a level-specific field in the model
+        current_score = self.get_dynamic_level_score(user, level)  # Fetch dynamic score for the level
+        return current_score + score  # Update the level score dynamically based on current score
+
+
+
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow public access
@@ -355,3 +399,84 @@ def get_test_notification(request):
     }, status=status.HTTP_200_OK)
 
 
+
+
+
+
+
+# logger = logging.getLogger(__name__)
+
+# class PracticeSessionView(APIView):
+#     authentication_classes = [JWTAuthentication]  # or TokenAuthentication based on your setup
+#     permission_classes = [IsAuthenticated]  # Ensure only logged-in users can access
+
+#     def get(self, request):
+#         """Retrieve the user's practice session details."""
+#         logger.info(f"Authorization header: {request.headers.get('Authorization')}")  # Log the Authorization header
+
+#         # Retrieve the latest session (session without level info)
+#         session = PracticeSession.objects.filter(user=request.user).order_by('-last_practiced').first()
+
+#         if session:
+#             # Returning user's session details without storing level in the model
+#             return Response({
+#                 "session_count": session.session_count,
+#                 "last_practiced": session.last_practiced,
+#                 "score": session.score,  # Include score in response
+#                 "level_score": self.get_level_score(request.user)  # Fetch user's dynamic level score
+#             }, status=status.HTTP_200_OK)
+        
+#         return Response({"message": "No practice session found!"}, status=status.HTTP_404_NOT_FOUND)
+
+#     def post(self, request):
+#         """Increment session count and update score when the user practices."""
+#         logger.info(f"User authenticated: {request.user.is_authenticated}")  # Log user authentication status
+
+#         level = request.data.get("level")  # Get level from the request body
+#         score = request.data.get("score", 0)  # Get score from the request body
+
+#         # Ensure level is valid
+#         if not level in [1, 2, 3]:
+#             return Response({"error": "Invalid level"}, status=status.HTTP_400_BAD_REQUEST)
+        
+#         # Update the session or create new (without level-specific field)
+#         session, created = PracticeSession.objects.get_or_create(user=request.user)
+#         session.session_count += 1
+#         session.score += score
+#         session.save()
+
+#         # Dynamically calculate level score based on the level passed in the request
+#         level_score = self.update_level_score(request.user, level, score)  # Update level score dynamically
+
+#         return Response({
+#             "message": "Practice session updated!",
+#             "session_count": session.session_count,
+#             "last_practiced": session.last_practiced,
+#             "score": session.score,
+#             "level_score": level_score  # Include dynamically calculated level score
+#         }, status=status.HTTP_200_OK)
+
+#     def get_level_score(self, user):
+#         """Helper method to fetch user's dynamic score per level."""
+#         # No need to store level in the model, just calculate based on existing data
+#         level_scores = {}
+#         levels = [1, 2, 3]  # These are the valid levels
+        
+#         for level in levels:
+#             level_scores[level] = self.get_dynamic_level_score(user, level)  # Dynamically calculate level score
+
+#         return level_scores
+
+#     def get_dynamic_level_score(self, user, level):
+#         """Dynamically calculate score based on level (no level field in model)."""
+#         # Dummy logic: Just return the score based on the user's practice sessions for the level
+#         session = PracticeSession.objects.filter(user=user).first()  # Get the user's latest session
+#         if session:
+#             return session.score  # Here, you can adjust how you calculate level scores dynamically
+#         return 0
+
+#     def update_level_score(self, user, level, score):
+#         """Helper method to update user's score for a specific level dynamically."""
+#         # Just return updated score without creating a level-specific field in the model
+#         current_score = self.get_dynamic_level_score(user, level)  # Fetch dynamic score for the level
+#         return current_score + score  # Update the level score dynamically based on current score
