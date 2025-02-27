@@ -1,52 +1,17 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 const PracticePage = () => {
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
-    const [incorrectAnswers, setIncorrectAnswers] = useState({});
-    const [correctAnswers, setCorrectAnswers] = useState({});
-    const [totalQuestions, setTotalQuestions] = useState(0);
+    const [incorrectAnswers, setIncorrectAnswers] = useState({ 1: {}, 2: {} });
+    const [correctAnswers, setCorrectAnswers] = useState({ 1: {}, 2: {} });
     const [level, setLevel] = useState(null);
     const [section, setSection] = useState(1);
     const [testCompleted, setTestCompleted] = useState(false);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const [totalQuestions, setTotalQuestions] = useState(0);
+    const [totalIncorrect, setTotalIncorrect] = useState(0);
 
     useEffect(() => {
         if (level !== null) {
@@ -58,11 +23,11 @@ const PracticePage = () => {
         axios.get(`http://localhost:8000/api/questions/${level}/${section}/`)
             .then((response) => {
                 setQuestions(response.data.questions);
-                setTotalQuestions((prev) => prev + response.data.questions.length);
                 setAnswers({});
                 setIncorrectAnswers((prev) => ({ ...prev, [section]: {} }));
                 setCorrectAnswers((prev) => ({ ...prev, [section]: {} }));
                 setCurrentQuestionIndex(0);
+                setTotalQuestions((prev) => prev + response.data.questions.length);
             })
             .catch((error) => console.error("Error fetching questions:", error));
     };
@@ -73,147 +38,89 @@ const PracticePage = () => {
             [questionId]: value,
         }));
     };
+
     const handleSubmit = () => {
-        // Submit the answers first
-        axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers }, {
-            headers: { "Content-Type": "application/json" },
-        })
-        .then((response) => {
-            const incorrect = response.data.incorrect_answers;
-            const correct = response.data.correct_answers;
-        
-            // Update the state with incorrect and correct answers
-            setIncorrectAnswers((prev) => ({
-                ...prev,
-                [section]: incorrect
-            }));
-        
-            setCorrectAnswers((prev) => ({
-                ...prev,
-                [section]: correct
-            }));
-        
-            // Calculate the score for this section
-            const incorrectCount = Object.keys(incorrect).length;
-            const totalQuestionsInSection = questions.length;
-            const sectionScore = totalQuestionsInSection - incorrectCount;
-        
-            // Add section score to total score
-            const updatedScore = sectionScore;
-        
-            // If it's the last section (Section 2), we update the practice session score
-            if (section === 2) {
-                // Check if token exists
-                const token = localStorage.getItem("access_token"); // Ensure correct key
-        
-                if (!token) {
-                    console.error("Token is missing! Please log in again.");
-                    window.location.href = '/login'; // Redirect to login if no token
-                    return;
+        axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers })
+            .then((response) => {
+                const { incorrect_answers, correct_answers } = response.data;
+                setIncorrectAnswers((prev) => ({ ...prev, [section]: incorrect_answers }));
+                setCorrectAnswers((prev) => ({ ...prev, [section]: correct_answers }));
+
+                const incorrectCount = Object.keys(incorrect_answers).length;
+                setTotalIncorrect(prev => prev + incorrectCount);
+
+                if (section === 2) {
+                    const finalScore = totalQuestions - (totalIncorrect + incorrectCount);
+                    setTestCompleted(true);
+                    alert(`Your final score is: ${finalScore}/${totalQuestions}`);
+                } else {
+                    setSection(2);
                 }
-        
-                // Send the total score and level to the practice session API
-                axios.post("http://localhost:8000/api/practice-session/", 
-                    { 
-                        score: updatedScore,
-                        level: level // Include level in the request
-                    }, 
-                    {
-                        headers: { 
-                            "Authorization": `Bearer ${token}`, // Add Bearer token
-                            "Content-Type": "application/json"
-                        }
-                    })
-                    .then(() => {
-                        console.log("Practice session updated with total score!");
-                        setTestCompleted(true); // Mark the test as completed
-                    })
-                    .catch((error) => {
-                        console.error("Error updating practice session:", error);
-                        console.log(error.response?.data); // Log the error response from the backend
-                    });
-            } else {
-                // Move to the next section
-                setSection(2); // Assuming section 2 is the next step
-            }
-        })
-        .catch((error) => {
-            console.error("Error submitting answers:", error);
-        });
+            })
+            .catch((error) => console.error("Error submitting answers:", error));
     };
-    
-    
+
     const handleLevelChange = (selectedLevel) => {
         setLevel(selectedLevel);
         setSection(1);
         setTestCompleted(false);
+        setIncorrectAnswers({ 1: {}, 2: {} });
+        setCorrectAnswers({ 1: {}, 2: {} });
+        setTotalIncorrect(0);
         setTotalQuestions(0);
-        setIncorrectAnswers({});
-        setCorrectAnswers({});
     };
 
     const handleBack = () => {
         setLevel(null);
         setTestCompleted(false);
-        setTotalQuestions(0);
         setSection(1);
-        setIncorrectAnswers({});
-        setCorrectAnswers({});
     };
-
-    // Calculate correct answers count
-    const correctCount = totalQuestions - Object.values(incorrectAnswers).reduce((sum, sec) => sum + Object.keys(sec).length, 0);
 
     return (
         <div className="container mx-auto p-4">
             <h1 className="text-2xl font-bold mb-4 text-center">Abacus Test</h1>
-
             {level === null ? (
                 <div className="mb-4 text-center">
                     {[1, 2, 3].map((lvl) => (
-                        <button 
-                            key={lvl} 
-                            onClick={() => handleLevelChange(lvl)} 
-                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mr-2"
-                        >
+                        <button key={lvl} onClick={() => handleLevelChange(lvl)} className="bg-blue-500 text-white px-4 py-2 rounded mr-2">
                             Level {lvl}
                         </button>
                     ))}
                 </div>
             ) : !testCompleted ? (
-                <div className="space-y-4">
+                <div>
                     <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
-                    
-                    <div className="flex justify-center space-x-2 mb-4">
-                        {questions.map((_, index) => (
-                            <button 
-                                key={index} 
-                                onClick={() => setCurrentQuestionIndex(index)} 
-                                className={`px-3 py-1 rounded ${index === currentQuestionIndex ? 'bg-blue-600 text-white' : 'bg-gray-300'}`}
-                            >
-                                {index + 1}
-                            </button>
-                        ))}
-                    </div>
-                    
                     {questions.length > 0 && (
-                        <div key={questions[currentQuestionIndex].id} className="p-4 border rounded shadow">
-                            <p className="text-lg font-semibold">{questions[currentQuestionIndex].question_text}</p>
+                        <div className="p-4 border rounded shadow">
+                            <p className="text-lg font-semibold">{questions[currentQuestionIndex]?.question_text}</p>
                             <input
                                 type="text"
-                                onChange={(e) => handleAnswerChange(questions[currentQuestionIndex].id, e.target.value)}
-                                value={answers[questions[currentQuestionIndex].id] || ""}
+                                onChange={(e) => handleAnswerChange(questions[currentQuestionIndex]?.id, e.target.value)}
+                                value={answers[questions[currentQuestionIndex]?.id] || ""}
                                 className="border p-2 w-full mt-2 rounded"
                                 placeholder="Enter your answer"
                             />
                         </div>
                     )}
                     
-                    {Object.keys(answers).length === questions.length && (
-                        <button 
-                            onClick={handleSubmit} 
-                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
-                        >
+                    {/* Pagination Buttons */}
+                    <div className="mt-4 flex justify-center space-x-2">
+                        {questions.map((_, index) => (
+                            <button
+                                key={index}
+                                onClick={() => setCurrentQuestionIndex(index)}
+                                className={`px-3 py-1 rounded ${
+                                    currentQuestionIndex === index ? "bg-blue-700 text-white" : "bg-gray-300 text-black"
+                                }`}
+                            >
+                                {index + 1}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Show Submit Button ONLY on the Last Question */}
+                    {currentQuestionIndex === questions.length - 1 && (
+                        <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded mt-4">
                             Submit Section {section}
                         </button>
                     )}
@@ -221,31 +128,23 @@ const PracticePage = () => {
             ) : (
                 <div className="p-6 border rounded shadow bg-gray-100 text-center">
                     <h2 className="text-xl font-bold">Level {level} Completed</h2>
-
                     <p className="text-lg text-green-600">
-                        Correct Answers: {correctCount} / {totalQuestions}
+                        Final Score: {totalQuestions - totalIncorrect}/{totalQuestions}
                     </p>
-
                     {[1, 2].map((sec) => (
                         <div key={sec} className="mt-4">
-                            <h2 className="text-xl font-semibold">Section {sec} Incorrect Answers</h2>
-                            {incorrectAnswers[sec] && Object.keys(incorrectAnswers[sec]).length > 0 ? (
+                            <h2 className="text-xl font-semibold">Section {sec}</h2>
+                            {Object.keys(incorrectAnswers[sec] || {}).length > 0 ? (
                                 Object.entries(incorrectAnswers[sec]).map(([questionId, userAnswer]) => (
                                     <div key={questionId} className="p-4 border rounded shadow">
                                         <p className="text-red-500">❌ Your Answer: {userAnswer}</p>
-                                        <p className="text-green-500">✔ Correct Answer: {correctAnswers[sec][questionId]}</p>
+                                        <p className="text-green-500">✔ Correct Answer: {correctAnswers[sec]?.[questionId]}</p>
                                     </div>
                                 ))
-                            ) : <p className="text-gray-600">No incorrect answers!</p>}
+                            ) : <p className="text-gray-600">All answers correct!</p>}
                         </div>
                     ))}
-                    
-                    <button 
-                        onClick={handleBack} 
-                        className="mt-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                    >
-                        Back
-                    </button>
+                    <button onClick={handleBack} className="mt-4 bg-gray-500 text-white px-4 py-2 rounded">Back</button>
                 </div>
             )}
         </div>
@@ -253,6 +152,144 @@ const PracticePage = () => {
 };
 
 export default PracticePage;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -311,11 +348,12 @@ export default PracticePage;
 //     const [answers, setAnswers] = useState({});
 //     const [incorrectAnswers, setIncorrectAnswers] = useState({});
 //     const [correctAnswers, setCorrectAnswers] = useState({});
-//     const [totalQuestions, setTotalQuestions] = useState(0);
 //     const [level, setLevel] = useState(null);
 //     const [section, setSection] = useState(1);
 //     const [testCompleted, setTestCompleted] = useState(false);
 //     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+//     const [totalScore, setTotalScore] = useState(0);
+//     const [totalQuestions, setTotalQuestions] = useState(0);
 
 //     useEffect(() => {
 //         if (level !== null) {
@@ -327,11 +365,11 @@ export default PracticePage;
 //         axios.get(`http://localhost:8000/api/questions/${level}/${section}/`)
 //             .then((response) => {
 //                 setQuestions(response.data.questions);
-//                 setTotalQuestions((prev) => prev + response.data.questions.length);
 //                 setAnswers({});
 //                 setIncorrectAnswers((prev) => ({ ...prev, [section]: {} }));
 //                 setCorrectAnswers((prev) => ({ ...prev, [section]: {} }));
 //                 setCurrentQuestionIndex(0);
+//                 setTotalQuestions((prev) => prev + response.data.questions.length); // Track total questions
 //             })
 //             .catch((error) => console.error("Error fetching questions:", error));
 //     };
@@ -342,147 +380,102 @@ export default PracticePage;
 //             [questionId]: value,
 //         }));
 //     };
+
 //     const handleSubmit = () => {
-//         // Submit the answers first
-//         axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers }, {
-//             headers: { "Content-Type": "application/json" },
-//         })
-//         .then((response) => {
-//             const incorrect = response.data.incorrect_answers;
-//             const correct = response.data.correct_answers;
-        
-//             // Update the state with incorrect and correct answers
-//             setIncorrectAnswers((prev) => ({
-//                 ...prev,
-//                 [section]: incorrect
-//             }));
-        
-//             setCorrectAnswers((prev) => ({
-//                 ...prev,
-//                 [section]: correct
-//             }));
-        
-//             // Calculate the score for this section
-//             const incorrectCount = Object.keys(incorrect).length;
-//             const totalQuestionsInSection = questions.length;
-//             const sectionScore = totalQuestionsInSection - incorrectCount;
-        
-//             // Add section score to total score
-//             const updatedScore = sectionScore;
-        
-//             // If it's the last section (Section 2), we update the practice session score
-//             if (section === 2) {
-//                 // Check if token exists
-//                 const token = localStorage.getItem("access_token"); // Ensure correct key
-        
-//                 if (!token) {
-//                     console.error("Token is missing! Please log in again.");
-//                     window.location.href = '/login'; // Redirect to login if no token
-//                     return;
-//                 }
-        
-//                 // Send the total score and level to the practice session API
-//                 axios.post("http://localhost:8000/api/practice-session/", 
-//                     { 
-//                         score: updatedScore,
-//                         level: level // Include level in the request
-//                     }, 
-//                     {
-//                         headers: { 
-//                             "Authorization": `Bearer ${token}`, // Add Bearer token
-//                             "Content-Type": "application/json"
-//                         }
-//                     })
+//         axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers })
+//             .then((response) => {
+//                 const { incorrect_answers, correct_answers } = response.data;
+//                 setIncorrectAnswers((prev) => ({ ...prev, [section]: incorrect_answers }));
+//                 setCorrectAnswers((prev) => ({ ...prev, [section]: correct_answers }));
+
+//                 const correctCount = Object.keys(correct_answers).length;
+//                 setTotalScore((prev) => prev + correctCount); // Update total correct count
+
+//                 if (section === 2) {
+//                     const token = localStorage.getItem("access_token");
+//                     if (!token) {
+//                         window.location.href = '/login';
+//                         return;
+//                     }
+
+//                     axios.post("http://localhost:8000/api/practice_session/", 
+//                         { score: totalScore + correctCount, total_questions: totalQuestions }, 
+//                         { headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" } }
+//                     )
 //                     .then(() => {
-//                         console.log("Practice session updated with total score!");
-//                         setTestCompleted(true); // Mark the test as completed
+//                         setTestCompleted(true);
+//                         alert(`Your total score is: ${totalScore + correctCount}/${totalQuestions}`);
 //                     })
-//                     .catch((error) => {
-//                         console.error("Error updating practice session:", error);
-//                         console.log(error.response?.data); // Log the error response from the backend
-//                     });
-//             } else {
-//                 // Move to the next section
-//                 setSection(2); // Assuming section 2 is the next step
-//             }
-//         })
-//         .catch((error) => {
-//             console.error("Error submitting answers:", error);
-//         });
+//                     .catch((error) => console.error("Error updating practice session:", error));
+//                 } else {
+//                     setSection(2); // Move to Section 2
+//                 }
+//             })
+//             .catch((error) => console.error("Error submitting answers:", error));
 //     };
-    
-    
+
 //     const handleLevelChange = (selectedLevel) => {
 //         setLevel(selectedLevel);
 //         setSection(1);
 //         setTestCompleted(false);
-//         setTotalQuestions(0);
 //         setIncorrectAnswers({});
 //         setCorrectAnswers({});
+//         setTotalScore(0);
+//         setTotalQuestions(0);
 //     };
 
 //     const handleBack = () => {
 //         setLevel(null);
 //         setTestCompleted(false);
-//         setTotalQuestions(0);
 //         setSection(1);
-//         setIncorrectAnswers({});
-//         setCorrectAnswers({});
 //     };
 
-//     // Calculate correct answers count
-//     const correctCount = totalQuestions - Object.values(incorrectAnswers).reduce((sum, sec) => sum + Object.keys(sec).length, 0);
+//     const handlePaginationClick = (index) => {
+//         setCurrentQuestionIndex(index);
+//     };
 
 //     return (
 //         <div className="container mx-auto p-4">
 //             <h1 className="text-2xl font-bold mb-4 text-center">Abacus Test</h1>
-
 //             {level === null ? (
 //                 <div className="mb-4 text-center">
 //                     {[1, 2, 3].map((lvl) => (
-//                         <button 
-//                             key={lvl} 
-//                             onClick={() => handleLevelChange(lvl)} 
-//                             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mr-2"
-//                         >
+//                         <button key={lvl} onClick={() => handleLevelChange(lvl)} className="bg-blue-500 text-white px-4 py-2 rounded mr-2">
 //                             Level {lvl}
 //                         </button>
 //                     ))}
 //                 </div>
 //             ) : !testCompleted ? (
-//                 <div className="space-y-4">
+//                 <div>
 //                     <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
-                    
-//                     <div className="flex justify-center space-x-2 mb-4">
-//                         {questions.map((_, index) => (
-//                             <button 
-//                                 key={index} 
-//                                 onClick={() => setCurrentQuestionIndex(index)} 
-//                                 className={`px-3 py-1 rounded ${index === currentQuestionIndex ? 'bg-blue-600 text-white' : 'bg-gray-300'}`}
-//                             >
-//                                 {index + 1}
-//                             </button>
-//                         ))}
-//                     </div>
-                    
 //                     {questions.length > 0 && (
-//                         <div key={questions[currentQuestionIndex].id} className="p-4 border rounded shadow">
-//                             <p className="text-lg font-semibold">{questions[currentQuestionIndex].question_text}</p>
+//                         <div className="p-4 border rounded shadow">
+//                             <p className="text-lg font-semibold">{questions[currentQuestionIndex]?.question_text}</p>
 //                             <input
 //                                 type="text"
-//                                 onChange={(e) => handleAnswerChange(questions[currentQuestionIndex].id, e.target.value)}
-//                                 value={answers[questions[currentQuestionIndex].id] || ""}
+//                                 onChange={(e) => handleAnswerChange(questions[currentQuestionIndex]?.id, e.target.value)}
+//                                 value={answers[questions[currentQuestionIndex]?.id] || ""}
 //                                 className="border p-2 w-full mt-2 rounded"
 //                                 placeholder="Enter your answer"
 //                             />
 //                         </div>
 //                     )}
-                    
+
+//                     {/* Pagination Buttons */}
+//                     <div className="flex justify-center mt-4">
+//                         {questions.map((_, index) => (
+//                             <button
+//                                 key={index}
+//                                 onClick={() => handlePaginationClick(index)}
+//                                 className={`px-4 py-2 rounded mx-1 ${currentQuestionIndex === index ? 'bg-blue-500 text-white' : 'bg-gray-300'}`}
+//                             >
+//                                 {index + 1}
+//                             </button>
+//                         ))}
+//                     </div>
+
 //                     {Object.keys(answers).length === questions.length && (
-//                         <button 
-//                             onClick={handleSubmit} 
-//                             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
-//                         >
+//                         <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded mt-4">
 //                             Submit Section {section}
 //                         </button>
 //                     )}
@@ -490,31 +483,21 @@ export default PracticePage;
 //             ) : (
 //                 <div className="p-6 border rounded shadow bg-gray-100 text-center">
 //                     <h2 className="text-xl font-bold">Level {level} Completed</h2>
-
-//                     <p className="text-lg text-green-600">
-//                         Correct Answers: {correctCount} / {totalQuestions}
-//                     </p>
-
+//                     <p className="text-lg text-green-600">Total Correct Answers: {totalScore}/{totalQuestions}</p>
 //                     {[1, 2].map((sec) => (
 //                         <div key={sec} className="mt-4">
 //                             <h2 className="text-xl font-semibold">Section {sec} Incorrect Answers</h2>
-//                             {incorrectAnswers[sec] && Object.keys(incorrectAnswers[sec]).length > 0 ? (
+//                             {Object.keys(incorrectAnswers[sec] || {}).length > 0 ? (
 //                                 Object.entries(incorrectAnswers[sec]).map(([questionId, userAnswer]) => (
 //                                     <div key={questionId} className="p-4 border rounded shadow">
 //                                         <p className="text-red-500">❌ Your Answer: {userAnswer}</p>
-//                                         <p className="text-green-500">✔ Correct Answer: {correctAnswers[sec][questionId]}</p>
+//                                         <p className="text-green-500">✔ Correct Answer: {correctAnswers[sec]?.[questionId]}</p>
 //                                     </div>
 //                                 ))
 //                             ) : <p className="text-gray-600">No incorrect answers!</p>}
 //                         </div>
 //                     ))}
-                    
-//                     <button 
-//                         onClick={handleBack} 
-//                         className="mt-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-//                     >
-//                         Back
-//                     </button>
+//                     <button onClick={handleBack} className="mt-4 bg-gray-500 text-white px-4 py-2 rounded">Back</button>
 //                 </div>
 //             )}
 //         </div>
@@ -522,6 +505,50 @@ export default PracticePage;
 // };
 
 // export default PracticePage;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

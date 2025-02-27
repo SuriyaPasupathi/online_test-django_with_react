@@ -7,7 +7,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User,AbacusTest,PracticeSession,session,TestNotification
+from .models import User,AbacusTest,session,TestNotification, UserAttempt, AttemptDetail
 from rest_framework import status 
 from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
@@ -209,84 +209,8 @@ class SubmitAnswersView(View):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
-# Initialize logger
 
-logger = logging.getLogger(__name__)
 
-class PracticeSessionView(APIView):
-    authentication_classes = [JWTAuthentication]  # or TokenAuthentication based on your setup
-    permission_classes = [IsAuthenticated]  # Ensure only logged-in users can access
-
-    def get(self, request):
-        """Retrieve the user's practice session details."""
-        logger.info(f"Authorization header: {request.headers.get('Authorization')}")  # Log the Authorization header
-
-        # Retrieve the latest session (session without level info)
-        session = PracticeSession.objects.filter(user=request.user).order_by('-last_practiced').first()
-
-        if session:
-            # Returning user's session details without storing level in the model
-            return Response({
-                "session_count": session.session_count,
-                "last_practiced": session.last_practiced,
-                "score": session.score,  # Include score in response
-                "level_score": self.get_level_score(request.user)  # Fetch user's dynamic level score
-            }, status=status.HTTP_200_OK)
-        
-        return Response({"message": "No practice session found!"}, status=status.HTTP_404_NOT_FOUND)
-
-    def post(self, request):
-        """Increment session count and update score when the user practices."""
-        logger.info(f"User authenticated: {request.user.is_authenticated}")  # Log user authentication status
-
-        level = request.data.get("level")  # Get level from the request body
-        score = request.data.get("score", 0)  # Get score from the request body
-
-        # Ensure level is valid
-        if not level in [1, 2, 3]:
-            return Response({"error": "Invalid level"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Update the session or create new (without level-specific field)
-        session, created = PracticeSession.objects.get_or_create(user=request.user)
-        session.session_count += 1
-        session.score += score
-        session.save()
-
-        # Dynamically calculate level score based on the level passed in the request
-        level_score = self.update_level_score(request.user, level, score)  # Update level score dynamically
-
-        return Response({
-            "message": "Practice session updated!",
-            "session_count": session.session_count,
-            "last_practiced": session.last_practiced,
-            "score": session.score,
-            "level_score": level_score  # Include dynamically calculated level score
-        }, status=status.HTTP_200_OK)
-
-    def get_level_score(self, user):
-        """Helper method to fetch user's dynamic score per level."""
-        # No need to store level in the model, just calculate based on existing data
-        level_scores = {}
-        levels = [1, 2, 3]  # These are the valid levels
-        
-        for level in levels:
-            level_scores[level] = self.get_dynamic_level_score(user, level)  # Dynamically calculate level score
-
-        return level_scores
-
-    def get_dynamic_level_score(self, user, level):
-        """Dynamically calculate score based on level (no level field in model)."""
-        # Dummy logic: Just return the score based on the user's practice sessions for the level
-        session = PracticeSession.objects.filter(user=user).first()  # Get the user's latest session
-        if session:
-            return session.score  # Here, you can adjust how you calculate level scores dynamically
-        return 0
-
-    def update_level_score(self, user, level, score):
-        """Helper method to update user's score for a specific level dynamically."""
-        # Just return updated score without creating a level-specific field in the model
-        current_score = self.get_dynamic_level_score(user, level)  # Fetch dynamic score for the level
-        return current_score + score  # Update the level score dynamically based on current score
 
 
 
@@ -404,79 +328,50 @@ def get_test_notification(request):
 
 
 
-# logger = logging.getLogger(__name__)
 
-# class PracticeSessionView(APIView):
-#     authentication_classes = [JWTAuthentication]  # or TokenAuthentication based on your setup
-#     permission_classes = [IsAuthenticated]  # Ensure only logged-in users can access
+@api_view(['POST'])
+def practice_session(request):
+    if request.user.is_authenticated:
+        user = request.user
+        score = request.data.get('score')  # Total correct answers
+        total_questions = request.data.get('total_questions', 0)  # Default to 0 if not provided
 
-#     def get(self, request):
-#         """Retrieve the user's practice session details."""
-#         logger.info(f"Authorization header: {request.headers.get('Authorization')}")  # Log the Authorization header
+        user_attempt, created = UserAttempt.objects.get_or_create(user=user)
 
-#         # Retrieve the latest session (session without level info)
-#         session = PracticeSession.objects.filter(user=request.user).order_by('-last_practiced').first()
+        # Store the correct total score in AttemptDetail
+        attempt_detail = AttemptDetail.objects.create(
+            user_attempt=user_attempt,
+            attempt_type="Practice",
+            score=score,
+            total_questions=total_questions  # Make sure total_questions is provided
+        )
 
-#         if session:
-#             # Returning user's session details without storing level in the model
-#             return Response({
-#                 "session_count": session.session_count,
-#                 "last_practiced": session.last_practiced,
-#                 "score": session.score,  # Include score in response
-#                 "level_score": self.get_level_score(request.user)  # Fetch user's dynamic level score
-#             }, status=status.HTTP_200_OK)
-        
-#         return Response({"message": "No practice session found!"}, status=status.HTTP_404_NOT_FOUND)
+        # Update practice count
+        user_attempt.practice_count += 1
+        user_attempt.save()
 
-#     def post(self, request):
-#         """Increment session count and update score when the user practices."""
-#         logger.info(f"User authenticated: {request.user.is_authenticated}")  # Log user authentication status
+        return Response({"message": "Practice session recorded successfully.", "score": f"{score}/{total_questions}"})
+    else:
+        return Response({"error": "User must be logged in."}, status=401)
 
-#         level = request.data.get("level")  # Get level from the request body
-#         score = request.data.get("score", 0)  # Get score from the request body
 
-#         # Ensure level is valid
-#         if not level in [1, 2, 3]:
-#             return Response({"error": "Invalid level"}, status=status.HTTP_400_BAD_REQUEST)
-        
-#         # Update the session or create new (without level-specific field)
-#         session, created = PracticeSession.objects.get_or_create(user=request.user)
-#         session.session_count += 1
-#         session.score += score
-#         session.save()
 
-#         # Dynamically calculate level score based on the level passed in the request
-#         level_score = self.update_level_score(request.user, level, score)  # Update level score dynamically
 
-#         return Response({
-#             "message": "Practice session updated!",
-#             "session_count": session.session_count,
-#             "last_practiced": session.last_practiced,
-#             "score": session.score,
-#             "level_score": level_score  # Include dynamically calculated level score
-#         }, status=status.HTTP_200_OK)
 
-#     def get_level_score(self, user):
-#         """Helper method to fetch user's dynamic score per level."""
-#         # No need to store level in the model, just calculate based on existing data
-#         level_scores = {}
-#         levels = [1, 2, 3]  # These are the valid levels
-        
-#         for level in levels:
-#             level_scores[level] = self.get_dynamic_level_score(user, level)  # Dynamically calculate level score
 
-#         return level_scores
 
-#     def get_dynamic_level_score(self, user, level):
-#         """Dynamically calculate score based on level (no level field in model)."""
-#         # Dummy logic: Just return the score based on the user's practice sessions for the level
-#         session = PracticeSession.objects.filter(user=user).first()  # Get the user's latest session
-#         if session:
-#             return session.score  # Here, you can adjust how you calculate level scores dynamically
-#         return 0
+@csrf_exempt  # Use this only if CSRF issues occur in testing (not recommended for production)
+def test_session(request):
+    if request.method == "POST":
+        try:
+            user_attempt, created = UserAttempt.objects.get_or_create(user=request.user)
+            user_attempt.test_count += 1  
+            user_attempt.save()
 
-#     def update_level_score(self, user, level, score):
-#         """Helper method to update user's score for a specific level dynamically."""
-#         # Just return updated score without creating a level-specific field in the model
-#         current_score = self.get_dynamic_level_score(user, level)  # Fetch dynamic score for the level
-#         return current_score + score  # Update the level score dynamically based on current score
+            # Store attempt details
+            AttemptDetail.objects.create(user_attempt=user_attempt, attempt_type='Test')
+
+            return JsonResponse({'message': 'Test session recorded'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    return JsonResponse({'error': 'Invalid request method'}, status=405)

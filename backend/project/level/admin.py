@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User,AbacusTest,PracticeSession,session,TestNotification
+from .models import User,AbacusTest,session,TestNotification,UserAttempt, AttemptDetail
+from django.db.models import Sum
 
 
 
@@ -47,21 +48,9 @@ class AbacusTestAdmin(admin.ModelAdmin):
 
 
 
-class PracticeSessionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'session_count', 'last_practiced','score')
-    readonly_fields = ('user', 'session_count', 'last_practiced','score')
-    search_fields = ('user__username',)
-
-    def has_change_permission(self, request, obj=None):
-        return False  # Prevent modifications
-
-    def has_delete_permission(self, request, obj=None):
-        return False  # Prevent deletion
-
-admin.site.register(PracticeSession, PracticeSessionAdmin)
 
 
-# Register the admin class
+
 
 
 
@@ -84,3 +73,40 @@ admin.site.register(TestNotification, TestNotificationAdmin)
 
 
 
+
+class AttemptDetailInline(admin.TabularInline):
+    model = AttemptDetail
+    extra = 0  # Don't show empty forms
+    # Assuming 'question' is a ForeignKey and 'user_answer', 'correct_answer' are fields in AttemptDetail
+    readonly_fields = ('question', 'user_answer', 'correct_answer')
+
+    def question(self, obj):
+        # This is assuming 'question' is a ForeignKey to another model
+        return obj.question.text if obj.question else None
+
+    def user_answer(self, obj):
+        return obj.user_answer
+
+    def correct_answer(self, obj):
+        return obj.correct_answer
+
+class UserAttemptAdmin(admin.ModelAdmin):
+    list_display = ('user', 'practice_count', 'test_count', 'total_score')
+    readonly_fields = ('user', 'practice_count', 'test_count', 'total_score')
+
+    def total_score(self, obj):
+        # Sum the scores from related AttemptDetails
+        total = AttemptDetail.objects.filter(user_attempt=obj).aggregate(total_score=Sum('score'))['total_score']
+        return total if total else 0
+    total_score.short_description = 'Total Score'
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:  # Make the score fields readonly only when the object already exists
+            return self.readonly_fields + ('total_score',)
+        return self.readonly_fields
+
+    inlines = [AttemptDetailInline]  # Show attempts as an inline table
+    search_fields = ('user__username',)
+
+# Register the custom admin class
+admin.site.register(UserAttempt, UserAttemptAdmin)

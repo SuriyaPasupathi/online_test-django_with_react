@@ -9,11 +9,15 @@ const TestQuestion = () => {
     const [section, setSection] = useState(1);
     const [testCompleted, setTestCompleted] = useState(false);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [timeRemaining, setTimeRemaining] = useState(0); // Timer state for each section
+    const [timeRemaining, setTimeRemaining] = useState(0); // Timer state
     const [totalScore, setTotalScore] = useState(0); // Total score across levels
+    const token = localStorage.getItem("token"); // Retrieve auth token
 
     useEffect(() => {
         fetchQuestions();
+        if (level === 1 && section === 1) {
+            startTestSession(); // Record test attempt when test starts
+        }
     }, [level, section]);
 
     useEffect(() => {
@@ -21,26 +25,41 @@ const TestQuestion = () => {
             const timer = setInterval(() => {
                 setTimeRemaining((prevTime) => prevTime - 1);
             }, 1000);
-
             return () => clearInterval(timer);
         }
     }, [timeRemaining]);
 
+    // Fetch Questions from Backend
     const fetchQuestions = () => {
-        axios.get(`http://localhost:8000/api/questions/${level}/${section}/`)
-            .then((response) => {
-                setQuestions(response.data.questions);
-                setTotalQuestions(response.data.questions.length);
-                setAnswers({});
-                setCurrentQuestionIndex(0);
-
-                // Set the timer based on the number of questions (e.g., 1 minute per question)
-                const timePerSection = response.data.questions.length * 60; // 60 seconds per question
-                setTimeRemaining(timePerSection);
-            })
-            .catch((error) => console.error("Error fetching questions:", error));
+        axios.get(`http://localhost:8000/api/questions/${level}/${section}/`, {
+            headers: { 
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            }
+        })
+        .then((response) => {
+            setQuestions(response.data.questions);
+            setTotalQuestions(response.data.questions.length);
+            setAnswers({});
+            setCurrentQuestionIndex(0);
+            setTimeRemaining(response.data.questions.length * 60); // 60 seconds per question
+        })
+        .catch((error) => console.error("Error fetching questions:", error));
     };
 
+    // Record Test Attempt in Backend
+    const startTestSession = () => {
+        axios.post("http://localhost:8000/api/test_session/", {}, {
+            headers: { 
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            }
+        })
+        .then(() => console.log("Test session recorded"))
+        .catch((error) => console.error("Error recording test session:", error));
+    };
+
+    // Handle Answer Change
     const handleAnswerChange = (questionId, value) => {
         setAnswers((prev) => ({
             ...prev,
@@ -48,21 +67,24 @@ const TestQuestion = () => {
         }));
     };
 
+    // Submit Answers and Validate
     const handleSubmit = () => {
         axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers }, {
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            }
         })
-        .then(() => {
-            // Calculate score for this section and update total score
-            const sectionScore = totalQuestions - Object.keys(answers).length; // Example calculation for score
+        .then((response) => {
+            const sectionScore = response.data.score;
             setTotalScore((prev) => prev + sectionScore);
 
             if (section === 1) {
-                setSection(2);
+                setSection(2); // Move to Section 2
             } else {
                 if (level < 3) {
                     setLevel(level + 1);
-                    setSection(1);
+                    setSection(1); // Reset to first section of next level
                 } else {
                     setTestCompleted(true);
                 }
@@ -72,8 +94,6 @@ const TestQuestion = () => {
     };
 
     const isLastQuestion = currentQuestionIndex === questions.length - 1;
-
-    // Format time remaining in minutes and seconds
     const formattedTimeRemaining = `${Math.floor(timeRemaining / 60)}:${timeRemaining % 60 < 10 ? "0" : ""}${timeRemaining % 60}`;
 
     return (
