@@ -96,13 +96,11 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# Update CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
-
+# Update CORS settings for production
+CORS_ALLOW_ALL_ORIGINS = False  # Disable for production
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",    # Vite default port
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",    # React default port
+    "http://your-production-domain.com",  # Add your production domain
+    "https://your-production-domain.com",
 ]
 
 CORS_ALLOW_METHODS = [
@@ -225,5 +223,12 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
+# Ensure sensitive data is stored in .env
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_HOST = os.getenv('DB_HOST')
+DB_PORT = os.getenv('DB_PORT')
 
 
