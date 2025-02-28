@@ -15,69 +15,21 @@ const Home = () => {
     navigate("/test_session");
   };
 
-  const refreshAccessToken = async () => {
-    const refreshToken = localStorage.getItem("refresh_token");
-
+  const handleLogout = async () => {
     try {
-        const response = await axios.post("http://127.0.0.1:8000/api/token/refresh/", {
-            refresh: refreshToken,
-        });
+      // Send POST request to the logout API
+      const response = await axios.post('http://localhost:8000/api/logout/'); // Change URL to match your API
 
-        localStorage.setItem("access_token", response.data.access);
-        return response.data.access;
+      if (response.status === 200) {
+        // If logout is successful, navigate to the login page
+        navigate('/Login_page');
+      } else {
+        setError('Logout failed, please try again.'); // Set error if logout fails
+      }
     } catch (error) {
-        console.error("Token refresh failed:", error);
-        return null;
+      setError('An error occurred while logging out. Please try again later.'); // Display error message
     }
-};
-
-const handleLogout = async () => {
-    let accessToken = localStorage.getItem("access_token");
-    const refreshToken = localStorage.getItem("refresh_token");
-
-    console.log("Refresh Token Before Logout:", refreshToken); // Debugging
-
-    if (!refreshToken) {
-        alert("No refresh token found. Redirecting to login...");
-        localStorage.clear();
-        navigate("/Login_page");
-        return;
-    }
-
-    // Refresh access token if expired
-    accessToken = await refreshAccessToken();
-
-    try {
-        await axios.post(
-            "http://127.0.0.1:8000/api/logout/",
-            { refresh_token: refreshToken },
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-
-        localStorage.clear();
-        alert("Logout successful. Redirecting to login...");
-        navigate("/Login_page");
-    } catch (error) {
-        console.error("Logout failed:", error);
-        localStorage.clear();
-
-        if (error.response) {
-            console.log("Response Data:", error.response.data); // Debugging
-
-            if (error.response.status === 400) {
-                alert("Invalid token or already logged out.");
-            } else if (error.response.status === 401) {
-                alert("Session expired. Please log in again.");
-            } else {
-                alert("Error logging out. Please try again.");
-            }
-        } else {
-            alert("Network error. Please check your connection.");
-        }
-
-        navigate("/Login_page");
-    }
-};
+  };
 
   
   return (

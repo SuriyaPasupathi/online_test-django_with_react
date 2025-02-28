@@ -7,7 +7,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User,AbacusTest,session,TestNotification, UserAttempt, AttemptDetail
+from .models import User,AbacusTest,session,TestNotification, UserAttempt, AttemptDetail,UserLogoutLog
 from rest_framework import status 
 from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
@@ -25,7 +25,7 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 from .utils import get_tokens_for_user
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth import logout
 
 
 
@@ -379,31 +379,34 @@ def test_session(request):
 
 
 class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
-
     def post(self, request):
-        refresh_token = request.data.get("refresh_token")
-
-        print("Received Refresh Token:", refresh_token)  # Debugging
-
-        if not refresh_token:
-            return Response({"error": "Refresh token is required"}, status=400)
-        
         try:
-            token = RefreshToken(refresh_token)
-            print("Token Created Successfully")  # Debugging
-
-            # Debug: Check token expiry
-            if token.is_expired():
-                print("Token is expired")
-                return Response({"error": "Refresh token is expired"}, status=400)
-
-            token.blacklist()  # Attempt to blacklist the token
-            print("Token Blacklisted Successfully")  # Debugging
-            return Response({"message": "Logout successful"}, status=200)
-        except TokenError as e:
-            print("TokenError:", str(e))  # Debugging
-            return Response({"error": "Invalid or expired refresh token"}, status=400)
+            # Optional: Log logout event in the database (if needed)
+            if request.user.is_authenticated:
+                # You can log the logout event (optional)
+                UserLogoutLog.objects.create(user=request.user, ip_address=request.META.get('REMOTE_ADDR'))
+            
+            # Perform logout (destroy session)
+            logout(request)
+            
+            # Prepare response data
+            response_data = {'message': 'Logged out successfully'}
+            serializer = LogoutResponseSerializer(data=response_data)
+            
+            if serializer.is_valid():
+                # Return success response
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            
+            # Return error if serializer is invalid
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         except Exception as e:
-            print("Exception:", str(e))  # Debugging
-            return Response({"error": str(e)}, status=500)  # Logs actual error
+            # Handle errors (logging out failed)
+            error_data = {'message': 'Error logging out', 'error': str(e)}
+            serializer = LogoutResponseSerializer(data=error_data)
+            
+            if serializer.is_valid():
+                # Return error response
+                return Response(serializer.data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
