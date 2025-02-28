@@ -88,7 +88,6 @@ class RegisterView(APIView):
         except Exception as e:
             logger.error(f"Error during registration: {str(e)}")
             return Response({'message': 'Something went wrong. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -138,7 +137,6 @@ def approve_user(request):
     except Exception as e:
         logger.error(f"Error approving user: {str(e)}")
         return Response({'message': 'Something went wrong. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 class GetQuestionsView(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
         # Fetch the questions based on level and section
@@ -148,8 +146,6 @@ class GetQuestionsView(View):
         questions_data = [{"id": question.id, "question_text": question.question_text} for question in questions]
 
         return JsonResponse({"questions": questions_data}, status=200)
-
-
 @method_decorator(csrf_exempt, name='dispatch')
 class SubmitAnswersView(View):
     def post(self, request, level_id, section_id, *args, **kwargs):
@@ -274,8 +270,6 @@ class validate_answer(View):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
-
-
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow public access
 def get_test_notification(request):
@@ -360,16 +354,11 @@ def practice_session(request):
     else:
         return Response({"error": "User must be logged in."}, status=401)
 
-<<<<<<< HEAD
-
-
-
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
-=======
+
 @csrf_exempt  # Use this only if CSRF issues occur in testing (not recommended for production)
->>>>>>> a58004149dc035ece8747e149173c61219442c84
+
 def test_session(request):
     print(f"Authenticated User: {request.user}")  # Log authenticated user
     if request.user.is_authenticated:
@@ -411,9 +400,6 @@ def test_session(request):
             return Response({"error": "An error occurred while processing your request."}, status=500)
     else:
         return Response({"error": "User must be logged in."}, status=401)
-
-
-
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
