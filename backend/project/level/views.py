@@ -19,11 +19,14 @@ from django.views import View
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .serializers import TestSerializer
+from .serializers import TestSerializer,LogoutResponseSerializer
 import random
 from django.contrib.auth import authenticate
 from django.utils import timezone
 from .utils import get_tokens_for_user
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+
 
 
 
@@ -107,6 +110,7 @@ class LoginView(APIView):
             # Generate JWT token
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
+            print("WSEFPIHOISHDOFIHSOIDHFOIHSIODFHOISBHDFIOBSOBDFIUOSBHDOIBFOISBDOVFBSOIDBV",access_token)
 
             return Response({"access_token": access_token}, status=status.HTTP_200_OK)
         
@@ -328,32 +332,27 @@ def get_test_notification(request):
 
 
 
-
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
 def practice_session(request):
+    print(f"Authenticated User: {request.user}")  # Log authenticated user
     if request.user.is_authenticated:
-        user = request.user
-        score = request.data.get('score')  # Total correct answers
-        total_questions = request.data.get('total_questions', 0)  # Default to 0 if not provided
+        try:
+            user = request.user
+            score = request.data.get('score')
+            total_questions = request.data.get('total_questions', 0)
 
-        user_attempt, created = UserAttempt.objects.get_or_create(user=user)
+            if score is None or total_questions == 0:
+                return Response({"error": "Missing required data: score and total_questions."}, status=400)
 
-        # Store the correct total score in AttemptDetail
-        attempt_detail = AttemptDetail.objects.create(
-            user_attempt=user_attempt,
-            attempt_type="Practice",
-            score=score,
-            total_questions=total_questions  # Make sure total_questions is provided
-        )
+            # Process the data here...
 
-        # Update practice count
-        user_attempt.practice_count += 1
-        user_attempt.save()
-
-        return Response({"message": "Practice session recorded successfully.", "score": f"{score}/{total_questions}"})
+            return Response({"message": "Practice session recorded successfully.", "score": f"{score}/{total_questions}"})
+        except Exception as e:
+            print(f"Error: {e}")
+            return Response({"error": "An error occurred while processing your request."}, status=500)
     else:
         return Response({"error": "User must be logged in."}, status=401)
-
 
 
 
@@ -375,3 +374,36 @@ def test_session(request):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get("refresh_token")
+
+        print("Received Refresh Token:", refresh_token)  # Debugging
+
+        if not refresh_token:
+            return Response({"error": "Refresh token is required"}, status=400)
+        
+        try:
+            token = RefreshToken(refresh_token)
+            print("Token Created Successfully")  # Debugging
+
+            # Debug: Check token expiry
+            if token.is_expired():
+                print("Token is expired")
+                return Response({"error": "Refresh token is expired"}, status=400)
+
+            token.blacklist()  # Attempt to blacklist the token
+            print("Token Blacklisted Successfully")  # Debugging
+            return Response({"message": "Logout successful"}, status=200)
+        except TokenError as e:
+            print("TokenError:", str(e))  # Debugging
+            return Response({"error": "Invalid or expired refresh token"}, status=400)
+        except Exception as e:
+            print("Exception:", str(e))  # Debugging
+            return Response({"error": str(e)}, status=500)  # Logs actual error

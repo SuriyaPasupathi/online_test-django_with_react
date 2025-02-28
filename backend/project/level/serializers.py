@@ -74,3 +74,6 @@ class UserAttemptSerializer(serializers.ModelSerializer):
         instance.test_count = validated_data.get('test_count', instance.test_count)
         instance.save()
         return instance
+class LogoutResponseSerializer(serializers.Serializer):
+    message = serializers.CharField(max_length=255)
+    error = serializers.CharField(max_length=255, required=False)

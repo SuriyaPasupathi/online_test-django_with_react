@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+
 # Load environment variables
 load_dotenv()
 
@@ -46,7 +47,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'rest_framework.authtoken',
-     
+    'rest_framework_simplejwt.token_blacklist',
+
     'level', 
 ]
 
@@ -67,6 +69,7 @@ AUTH_USER_MODEL = 'level.User'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
       'rest_framework_simplejwt.authentication.JWTAuthentication',
+      'rest_framework.authentication.TokenAuthentication', 
 
     ],
     'DEFAULT_RENDERER_CLASSES': [
@@ -188,3 +191,5 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
+
