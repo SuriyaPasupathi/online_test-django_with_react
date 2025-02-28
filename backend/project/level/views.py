@@ -235,55 +235,60 @@ def get_random_questions(request, level_id, section_id):
 
     return Response(serialized_questions.data)
 
-@api_view(['POST'])
-@permission_classes([AllowAny])  # Allow public access
-def validate_answers(request, level_id, section_id):
-    """
-    Validate the answers submitted by the user for a specific level and section.
-    Return the score based on correct answers, and update the user's practice session score.
-    """
-    answers = request.data.get('answers', {})
+@method_decorator(csrf_exempt, name='dispatch')
+class validate_answer(View):
+    def post(self, request, level_id, section_id, *args, **kwargs):
+        try:
+            data = json.loads(request.body)
+            answers = data.get('answers', {})
 
-    if not isinstance(answers, dict):
-        return Response({"error": "Invalid data format. Answers must be a dictionary."}, status=400)
+            if not answers:
+                return JsonResponse({"error": "No answers provided."}, status=400)
 
-    questions = AbacusTest.objects.filter(level=level_id, section=section_id)
-    score = 0
-    incorrect_answers = []
-    correct_answers = {}
+            correct_count = 0
+            incorrect_answers = {}
+            correct_answers = {}
 
-    # Iterate through each question and check the user's answer
-    for question in questions:
-        user_answer = answers.get(str(question.id), "").strip().lower()
-        if user_answer == question.correct_answer.strip().lower():
-            score += 1
-        else:
-            incorrect_answers.append(question.id)
-            correct_answers[question.id] = question.correct_answer
+            # Fetch all questions for this level and section
+            questions = session.objects.filter(level=level_id, section=section_id)
+            total_questions = questions.count()  # Get the exact number of questions posted by admin
 
-    # Logic to determine whether to move to the next section or level
-    move_to_next_section = score >= 7  # Move to next section if 7/10 are correct
-    move_to_next_level = False
+            # Validate submitted answers
+            for question in questions:
+                question_id = str(question.id)
+                user_answer = answers.get(question_id, "").strip()
+                if user_answer == str(question.correct_answer).strip():
+                    correct_count += 1
+                else:
+                    incorrect_answers[question_id] = user_answer
+                    correct_answers[question_id] = question.correct_answer
 
-    # Move to the next level if Level 3 & Section 2 is completed with a high enough score
-    if level_id == 3 and section_id == 2 and score >= 14:
-        move_to_next_level = True
+            score = f"{correct_count}/{total_questions}"
 
-    # Update the score in the user's PracticeSession
-    user = request.user  # Assuming the user is authenticated
-    session, created = PracticeSession.objects.get_or_create(user=user)
+            # If it's the second section, return total results
+            if section_id == 2:
+                return JsonResponse({
+                    "score": score,
+                    "total_score": correct_count,  # Final total score
+                    "incorrect_answers": incorrect_answers,  # Retain incorrect answers from both sections
+                    "correct_answers": correct_answers,
+                    "move_to_next_level": True,
+                }, status=200)
 
-    # Add score to the session (you can adjust this logic as needed)
-    session.score += score
-    session.save()
+            # If Section 1 is completed, pass incorrect answers to Section 2
+            return JsonResponse({
+                "score": score,
+                "total_score": correct_count,  # Accumulate score for Section 2
+                "incorrect_answers": incorrect_answers,
+                "correct_answers": correct_answers,
+                "move_to_next_section": True,
+            }, status=200)
 
-    return Response({
-        "score": score,
-        "incorrect_answers": incorrect_answers,
-        "correct_answers": correct_answers,
-        "move_to_next_section": move_to_next_section,
-        "move_to_next_level": move_to_next_level
-    })
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON format."}, status=400)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
 
 
 @api_view(['GET'])
@@ -378,21 +383,51 @@ def practice_session(request):
 
 
 
-@csrf_exempt  # Use this only if CSRF issues occur in testing (not recommended for production)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
 def test_session(request):
-    if request.method == "POST":
+    print(f"Authenticated User: {request.user}")  # Log authenticated user
+    if request.user.is_authenticated:
         try:
-            user_attempt, created = UserAttempt.objects.get_or_create(user=request.user)
-            user_attempt.test_count += 1  
+            user = request.user
+            score = request.data.get('score')
+            total_questions = request.data.get('total_questions', 0)
+
+            if score is None or total_questions == 0:
+                return Response({"error": "Missing required data: score and total_questions."}, status=400)
+
+            # Get or create the UserAttempt object for the current user
+            user_attempt, created = UserAttempt.objects.get_or_create(user=user)
+
+            # Increment test count
+            user_attempt.test_count += 1
             user_attempt.save()
 
-            # Store attempt details
-            AttemptDetail.objects.create(user_attempt=user_attempt, attempt_type='Test')
+            # Create AttemptDetail record for this test session
+            attempt_detail = AttemptDetail.objects.create(
+                user_attempt=user_attempt,
+                attempt_type="Test",
+                score=score,
+                total_questions=total_questions
+            )
 
-            return JsonResponse({'message': 'Test session recorded'})
+            # Return a response with success message
+            return Response({
+                "message": "Test session recorded successfully.",
+                "score": f"{score}/{total_questions}",
+                "attempt_detail": str(attempt_detail)
+            })
+
+        except IntegrityError as e:
+            print(f"Integrity Error: {e}")
+            return Response({"error": "Database error occurred while processing your request."}, status=500)
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
-    return JsonResponse({'error': 'Invalid request method'}, status=405)
+            print(f"Error: {e}")
+            return Response({"error": "An error occurred while processing your request."}, status=500)
+    else:
+        return Response({"error": "User must be logged in."}, status=401)
+
 
 
 

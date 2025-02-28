@@ -11,13 +11,9 @@ const TestQuestion = () => {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [timeRemaining, setTimeRemaining] = useState(0); // Timer state
     const [totalScore, setTotalScore] = useState(0); // Total score across levels
-    const token = localStorage.getItem("token"); // Retrieve auth token
 
     useEffect(() => {
         fetchQuestions();
-        if (level === 1 && section === 1) {
-            startTestSession(); // Record test attempt when test starts
-        }
     }, [level, section]);
 
     useEffect(() => {
@@ -31,32 +27,15 @@ const TestQuestion = () => {
 
     // Fetch Questions from Backend
     const fetchQuestions = () => {
-        axios.get(`http://localhost:8000/api/questions/${level}/${section}/`, {
-            headers: { 
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            }
-        })
-        .then((response) => {
-            setQuestions(response.data.questions);
-            setTotalQuestions(response.data.questions.length);
-            setAnswers({});
-            setCurrentQuestionIndex(0);
-            setTimeRemaining(response.data.questions.length * 60); // 60 seconds per question
-        })
-        .catch((error) => console.error("Error fetching questions:", error));
-    };
-
-    // Record Test Attempt in Backend
-    const startTestSession = () => {
-        axios.post("http://localhost:8000/api/test_session/", {}, {
-            headers: { 
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            }
-        })
-        .then(() => console.log("Test session recorded"))
-        .catch((error) => console.error("Error recording test session:", error));
+        axios.get(`http://localhost:8000/api/random_questions/${level}/${section}/`)
+            .then((response) => {
+                setQuestions(response.data.questions);
+                setTotalQuestions(response.data.questions.length);
+                setAnswers({});
+                setCurrentQuestionIndex(0);
+                setTimeRemaining(response.data.questions.length * 60); // 60 seconds per question
+            })
+            .catch((error) => console.error("Error fetching questions:", error));
     };
 
     // Handle Answer Change
@@ -69,28 +48,23 @@ const TestQuestion = () => {
 
     // Submit Answers and Validate
     const handleSubmit = () => {
-        axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers }, {
-            headers: { 
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            }
-        })
-        .then((response) => {
-            const sectionScore = response.data.score;
-            setTotalScore((prev) => prev + sectionScore);
+        axios.post(`http://localhost:8000/api/validate_answers/${level}/${section}/`, { answers })
+            .then((response) => {
+                const sectionScore = response.data.score;
+                setTotalScore((prev) => prev + sectionScore);
 
-            if (section === 1) {
-                setSection(2); // Move to Section 2
-            } else {
-                if (level < 3) {
-                    setLevel(level + 1);
-                    setSection(1); // Reset to first section of next level
+                if (section === 1) {
+                    setSection(2); // Move to Section 2
                 } else {
-                    setTestCompleted(true);
+                    if (level < 3) {
+                        setLevel(level + 1);
+                        setSection(1); // Reset to first section of next level
+                    } else {
+                        setTestCompleted(true); // Test Completed
+                    }
                 }
-            }
-        })
-        .catch((error) => console.error("Error submitting answers:", error));
+            })
+            .catch((error) => console.error("Error submitting answers:", error));
     };
 
     const isLastQuestion = currentQuestionIndex === questions.length - 1;
@@ -106,9 +80,9 @@ const TestQuestion = () => {
 
                     <div className="flex justify-center space-x-2 mb-4">
                         {questions.map((_, index) => (
-                            <button 
-                                key={index} 
-                                onClick={() => setCurrentQuestionIndex(index)} 
+                            <button
+                                key={index}
+                                onClick={() => setCurrentQuestionIndex(index)}
                                 className={`px-3 py-1 rounded ${index === currentQuestionIndex ? 'bg-blue-600 text-white' : 'bg-gray-300'}`}
                             >
                                 {index + 1}
