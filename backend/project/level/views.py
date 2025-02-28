@@ -402,37 +402,31 @@ class LogoutView(APIView):
 
     def post(self, request):
         try:
-            print("Logout attempt - User:", request.user)
-            print("Request headers:", request.headers)
-            print("Request data:", request.data)
-
+            logger.info(f"Logout attempt - User: {request.user}")
             refresh_token = request.data.get('refresh')
             if not refresh_token:
-                print("No refresh token provided")
+                logger.warning("No refresh token provided")
                 return Response(
                     {"error": "Refresh token is required"}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             try:
-                # Attempt to blacklist the token
                 token = RefreshToken(refresh_token)
                 token.blacklist()
-                print("Token blacklisted successfully")
+                logger.info("Token blacklisted successfully")
             except TokenError as e:
-                print(f"Token error: {e}")
+                logger.warning(f"Token error: {e}")
             except Exception as e:
-                print(f"Token blacklist error: {e}")
+                logger.error(f"Token blacklist error: {e}")
 
-            # Only clear the session
             request.session.flush()
-            
             return Response(
                 {"message": "Successfully logged out"}, 
                 status=status.HTTP_200_OK
             )
         except Exception as e:
-            print(f"Logout error: {e}")
+            logger.error(f"Logout error: {e}")
             return Response(
                 {"error": str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
