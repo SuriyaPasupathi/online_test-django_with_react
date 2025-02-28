@@ -1,5 +1,4 @@
 import logging
-
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
@@ -28,14 +27,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import IntegrityError
 from rest_framework_simplejwt.tokens import TokenError
 
-
-
-
-
-
-# Set up logger
-logger = logging.getLogger(__name__)
-
+logger = logging.getLogger(__name__) # Set up logger
 class RegisterView(APIView):
     permission_classes = [AllowAny]  # Allow any user (unauthenticated)
 
@@ -212,13 +204,6 @@ class SubmitAnswersView(View):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
-
-
-
-
-
-
-
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow public access
 def get_random_questions(request, level_id, section_id):
@@ -326,11 +311,6 @@ def get_test_notification(request):
     }, status=status.HTTP_200_OK)
 
 
-
-
-
-
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
 def practice_session(request):
@@ -375,9 +355,6 @@ def practice_session(request):
     else:
         return Response({"error": "User must be logged in."}, status=401)
 
-
-
-
 @csrf_exempt  # Use this only if CSRF issues occur in testing (not recommended for production)
 def test_session(request):
     if request.method == "POST":
@@ -393,8 +370,6 @@ def test_session(request):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'error': 'Invalid request method'}, status=405)
-
-
 
 
 class LogoutView(APIView):
@@ -432,20 +407,3 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
