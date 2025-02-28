@@ -17,17 +17,46 @@ const Home = () => {
 
   const handleLogout = async () => {
     try {
-      // Send POST request to the logout API
-      const response = await axios.post('http://localhost:8000/api/logout/'); // Change URL to match your API
+        const accessToken = localStorage.getItem('access_token');
+        const refreshToken = localStorage.getItem('refresh_token');
 
-      if (response.status === 200) {
-        // If logout is successful, navigate to the login page
-        navigate('/Login_page');
-      } else {
-        setError('Logout failed, please try again.'); // Set error if logout fails
-      }
+        console.log('Sending logout request...');
+        
+        if (!accessToken || !refreshToken) {
+            console.error('No tokens found');
+            window.location.href = '/login_page';
+            return;
+        }
+
+        try {
+            const response = await fetch('http://localhost:8000/api/logout/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                    refresh: refreshToken
+                })
+            });
+
+            console.log('Response status:', response.status);
+            const data = await response.json().catch(() => null);
+            console.log('Response data:', data);
+
+            if (response.ok) {
+                // Don't clear localStorage, just redirect
+                window.location.href = '/login_page';
+                console.log('Logout successful');
+            } else {
+                console.error('Logout failed:', data);
+            }
+        } catch (error) {
+            console.error('Logout request failed:', error);
+        }
     } catch (error) {
-      setError('An error occurred while logging out. Please try again later.'); // Display error message
+        console.error('Logout error:', error);
+        window.location.href = '/Register_page';
     }
   };
 

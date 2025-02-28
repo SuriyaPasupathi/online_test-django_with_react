@@ -26,6 +26,7 @@ from django.utils import timezone
 from .utils import get_tokens_for_user
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import logout
+from rest_framework_simplejwt.tokens import TokenError
 
 
 
@@ -100,21 +101,39 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get("username")
-        password = request.data.get("password")
+        try:
+            username = request.data.get("username")
+            password = request.data.get("password")
 
-        # Authenticate the user
-        user = authenticate(username=username, password=password)
+            # Authenticate the user
+            user = authenticate(username=username, password=password)
 
-        if user is not None:
-            # Generate JWT token
-            refresh = RefreshToken.for_user(user)
-            access_token = str(refresh.access_token)
-            print("WSEFPIHOISHDOFIHSOIDHFOIHSIODFHOISBHDFIOBSOBDFIUOSBHDOIBFOISBDOVFBSOIDBV",access_token)
-
-            return Response({"access_token": access_token}, status=status.HTTP_200_OK)
-        
-        return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+            if user is not None:
+                # Generate JWT token
+                refresh = RefreshToken.for_user(user)
+                access_token = str(refresh.access_token)
+                
+                return Response({
+                    "access_token": str(access_token),
+                    "refresh_token": str(refresh),
+                    "user": {
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email
+                    }
+                }, status=status.HTTP_200_OK)
+            
+            return Response(
+                {"error": "Invalid credentials"}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            
+        except Exception as e:
+            print(f"Login error: {e}")
+            return Response(
+                {"error": "Login failed"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 @api_view(['POST'])
@@ -379,34 +398,42 @@ def test_session(request):
 
 
 class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         try:
-            # Optional: Log logout event in the database (if needed)
-            if request.user.is_authenticated:
-                # You can log the logout event (optional)
-                UserLogoutLog.objects.create(user=request.user, ip_address=request.META.get('REMOTE_ADDR'))
+            print("Logout attempt - User:", request.user)
+            print("Request headers:", request.headers)
+            print("Request data:", request.data)
+
+            refresh_token = request.data.get('refresh')
+            if not refresh_token:
+                print("No refresh token provided")
+                return Response(
+                    {"error": "Refresh token is required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                # Attempt to blacklist the token
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+                print("Token blacklisted successfully")
+            except TokenError as e:
+                print(f"Token error: {e}")
+            except Exception as e:
+                print(f"Token blacklist error: {e}")
+
+            # Only clear the session
+            request.session.flush()
             
-            # Perform logout (destroy session)
-            logout(request)
-            
-            # Prepare response data
-            response_data = {'message': 'Logged out successfully'}
-            serializer = LogoutResponseSerializer(data=response_data)
-            
-            if serializer.is_valid():
-                # Return success response
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            
-            # Return error if serializer is invalid
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"message": "Successfully logged out"}, 
+                status=status.HTTP_200_OK
+            )
         except Exception as e:
-            # Handle errors (logging out failed)
-            error_data = {'message': 'Error logging out', 'error': str(e)}
-            serializer = LogoutResponseSerializer(data=error_data)
-            
-            if serializer.is_valid():
-                # Return error response
-                return Response(serializer.data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            print(f"Logout error: {e}")
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
