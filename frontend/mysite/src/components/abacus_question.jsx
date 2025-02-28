@@ -4,14 +4,14 @@ import axios from "axios";
 const PracticePage = () => {
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
-    const [incorrectAnswers, setIncorrectAnswers] = useState({});
-    const [lastCorrectAnswers, setLastCorrectAnswers] = useState({}); // changed from correctAnswers to lastCorrectAnswers
+    const [incorrectAnswers, setIncorrectAnswers] = useState({ 1: {}, 2: {} });
+    const [correctAnswers, setCorrectAnswers] = useState({ 1: {}, 2: {} });
     const [level, setLevel] = useState(null);
     const [section, setSection] = useState(1);
     const [testCompleted, setTestCompleted] = useState(false);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [totalScore, setTotalScore] = useState(0);
     const [totalQuestions, setTotalQuestions] = useState(0);
+    const [totalIncorrect, setTotalIncorrect] = useState(0);
 
     useEffect(() => {
         if (level !== null) {
@@ -19,15 +19,36 @@ const PracticePage = () => {
         }
     }, [level, section]);
 
+    useEffect(() => {
+        if (testCompleted) {
+            // Call the practice session API automatically after completing the test
+            axios
+                .post("http://localhost:8000/api/practice_session/", {
+                    score: totalQuestions - totalIncorrect,
+                    total_questions: totalQuestions,
+                }, {
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem("access_token")}` // Add auth token if needed
+                    }
+                })
+                .then((response) => {
+                    console.log("Practice session recorded:", response.data);
+                })
+                .catch((error) => {
+                    console.error("Error submitting practice session:", error);
+                });
+        }
+    }, [testCompleted]); // Runs when test is completed
+
     const fetchQuestions = () => {
         axios.get(`http://localhost:8000/api/questions/${level}/${section}/`)
             .then((response) => {
                 setQuestions(response.data.questions);
                 setAnswers({});
                 setIncorrectAnswers((prev) => ({ ...prev, [section]: {} }));
-                setLastCorrectAnswers((prev) => ({ ...prev, [section]: {} })); // reset lastCorrectAnswers
+                setCorrectAnswers((prev) => ({ ...prev, [section]: {} }));
                 setCurrentQuestionIndex(0);
-                setTotalQuestions((prev) => prev + response.data.questions.length); // Track total questions
+                setTotalQuestions((prev) => prev + response.data.questions.length);
             })
             .catch((error) => console.error("Error fetching questions:", error));
     };
@@ -44,29 +65,17 @@ const PracticePage = () => {
             .then((response) => {
                 const { incorrect_answers, correct_answers } = response.data;
                 setIncorrectAnswers((prev) => ({ ...prev, [section]: incorrect_answers }));
-                setLastCorrectAnswers((prev) => ({ ...prev, [section]: correct_answers })); // save last correct answers
+                setCorrectAnswers((prev) => ({ ...prev, [section]: correct_answers }));
 
-                const correctCount = Object.keys(correct_answers).length;
-                setTotalScore((prev) => prev + correctCount); // Update total correct count
+                const incorrectCount = Object.keys(incorrect_answers).length;
+                setTotalIncorrect(prev => prev + incorrectCount);
 
                 if (section === 2) {
-                    const token = localStorage.getItem("access_token");
-                    if (!token) {
-                        window.location.href = '/login';
-                        return;
-                    }
-
-                    axios.post("http://localhost:8000/api/practice_session/", 
-                        { score: totalScore + correctCount, total_questions: totalQuestions }, 
-                        { headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" } }
-                    )
-                    .then(() => {
-                        setTestCompleted(true);
-                        alert(`Your total score is: ${totalScore + correctCount}/${totalQuestions}`);
-                    })
-                    .catch((error) => console.error("Error updating practice session:", error));
+                    const finalScore = totalQuestions - (totalIncorrect + incorrectCount);
+                    setTestCompleted(true);
+                    alert(`Your final score is: ${finalScore}/${totalQuestions}`);
                 } else {
-                    setSection(2); // Move to Section 2
+                    setSection(2);
                 }
             })
             .catch((error) => console.error("Error submitting answers:", error));
@@ -76,9 +85,9 @@ const PracticePage = () => {
         setLevel(selectedLevel);
         setSection(1);
         setTestCompleted(false);
-        setIncorrectAnswers({});
-        setLastCorrectAnswers({}); // reset lastCorrectAnswers
-        setTotalScore(0);
+        setIncorrectAnswers({ 1: {}, 2: {} });
+        setCorrectAnswers({ 1: {}, 2: {} });
+        setTotalIncorrect(0);
         setTotalQuestions(0);
     };
 
@@ -86,10 +95,6 @@ const PracticePage = () => {
         setLevel(null);
         setTestCompleted(false);
         setSection(1);
-    };
-
-    const handlePaginationClick = (index) => {
-        setCurrentQuestionIndex(index);
     };
 
     return (
@@ -118,21 +123,24 @@ const PracticePage = () => {
                             />
                         </div>
                     )}
-
+                    
                     {/* Pagination Buttons */}
-                    <div className="flex justify-center mt-4">
+                    <div className="mt-4 flex justify-center space-x-2">
                         {questions.map((_, index) => (
                             <button
                                 key={index}
-                                onClick={() => handlePaginationClick(index)}
-                                className={`px-4 py-2 rounded mx-1 ${currentQuestionIndex === index ? 'bg-blue-500 text-white' : 'bg-gray-300'}`}
+                                onClick={() => setCurrentQuestionIndex(index)}
+                                className={`px-3 py-1 rounded ${
+                                    currentQuestionIndex === index ? "bg-blue-700 text-white" : "bg-gray-300 text-black"
+                                }`}
                             >
                                 {index + 1}
                             </button>
                         ))}
                     </div>
 
-                    {Object.keys(answers).length === questions.length && (
+                    {/* Show Submit Button ONLY on the Last Question */}
+                    {currentQuestionIndex === questions.length - 1 && (
                         <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded mt-4">
                             Submit Section {section}
                         </button>
@@ -141,18 +149,20 @@ const PracticePage = () => {
             ) : (
                 <div className="p-6 border rounded shadow bg-gray-100 text-center">
                     <h2 className="text-xl font-bold">Level {level} Completed</h2>
-                    <p className="text-lg text-green-600">Total Correct Answers: {totalScore}/{totalQuestions}</p>
+                    <p className="text-lg text-green-600">
+                        Final Score: {totalQuestions - totalIncorrect}/{totalQuestions}
+                    </p>
                     {[1, 2].map((sec) => (
                         <div key={sec} className="mt-4">
-                            <h2 className="text-xl font-semibold">Section {sec} Incorrect Answers</h2>
+                            <h2 className="text-xl font-semibold">Section {sec}</h2>
                             {Object.keys(incorrectAnswers[sec] || {}).length > 0 ? (
                                 Object.entries(incorrectAnswers[sec]).map(([questionId, userAnswer]) => (
                                     <div key={questionId} className="p-4 border rounded shadow">
                                         <p className="text-red-500">❌ Your Answer: {userAnswer}</p>
-                                        <p className="text-green-500">✔ Correct Answer: {lastCorrectAnswers[sec]?.[questionId]}</p> {/* Display last correct answer */}
+                                        <p className="text-green-500">✔ Correct Answer: {correctAnswers[sec]?.[questionId]}</p>
                                     </div>
                                 ))
-                            ) : <p className="text-gray-600">No incorrect answers!</p>}
+                            ) : <p className="text-gray-600">All answers correct!</p>}
                         </div>
                     ))}
                     <button onClick={handleBack} className="mt-4 bg-gray-500 text-white px-4 py-2 rounded">Back</button>
@@ -163,3 +173,16 @@ const PracticePage = () => {
 };
 
 export default PracticePage;
+
+
+
+
+
+
+
+
+
+
+
+
+

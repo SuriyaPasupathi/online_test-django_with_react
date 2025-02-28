@@ -365,6 +365,8 @@ def practice_session(request):
                 return Response({"error": "Missing required data: score and total_questions."}, status=400)
 
             # Process the data here...
+            # For example, you can save it or log it to a database.
+            print(f"Score: {score}/{total_questions} for user {user.username}")
 
             return Response({"message": "Practice session recorded successfully.", "score": f"{score}/{total_questions}"})
         except Exception as e:
@@ -372,7 +374,6 @@ def practice_session(request):
             return Response({"error": "An error occurred while processing your request."}, status=500)
     else:
         return Response({"error": "User must be logged in."}, status=401)
-
 
 
 
@@ -437,3 +438,44 @@ class LogoutView(APIView):
                 {"error": str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
+# def practice_session(request):
+#     print(f"Authenticated User: {request.user}")  # Log authenticated user
+#     if request.user.is_authenticated:
+#         try:
+#             user = request.user
+#             score = request.data.get('score')
+#             total_questions = request.data.get('total_questions', 0)
+
+#             if score is None or total_questions == 0:
+#                 return Response({"error": "Missing required data: score and total_questions."}, status=400)
+
+#             # Process the data here...
+#             # For example, you can save it or log it to a database.
+#             print(f"Score: {score}/{total_questions} for user {user.username}")
+
+#             return Response({"message": "Practice session recorded successfully.", "score": f"{score}/{total_questions}"})
+#         except Exception as e:
+#             print(f"Error: {e}")
+#             return Response({"error": "An error occurred while processing your request."}, status=500)
+#     else:
+#         return Response({"error": "User must be logged in."}, status=401)
