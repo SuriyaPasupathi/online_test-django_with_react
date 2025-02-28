@@ -19,13 +19,13 @@ from django.views import View
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .serializers import TestSerializer,LogoutResponseSerializer
+from .serializers import TestSerializer
 import random
 from django.contrib.auth import authenticate
 from django.utils import timezone
 from .utils import get_tokens_for_user
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import logout
+from django.db import IntegrityError
 from rest_framework_simplejwt.tokens import TokenError
 
 
@@ -101,40 +101,20 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        try:
-            username = request.data.get("username")
-            password = request.data.get("password")
+        username = request.data.get("username")
+        password = request.data.get("password")
 
-            # Authenticate the user
-            user = authenticate(username=username, password=password)
+        # Authenticate the user
+        user = authenticate(username=username, password=password)
 
-            if user is not None:
-                # Generate JWT token
-                refresh = RefreshToken.for_user(user)
-                access_token = str(refresh.access_token)
-                
-                return Response({
-                    "access_token": str(access_token),
-                    "refresh_token": str(refresh),
-                    "user": {
-                        "id": user.id,
-                        "username": user.username,
-                        "email": user.email
-                    }
-                }, status=status.HTTP_200_OK)
-            
-            return Response(
-                {"error": "Invalid credentials"}, 
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-            
-        except Exception as e:
-            print(f"Login error: {e}")
-            return Response(
-                {"error": "Login failed"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if user is not None:
+            # Generate JWT token
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
 
+            return Response({"access_token": access_token}, status=status.HTTP_200_OK)
+        
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 def approve_user(request):
@@ -364,17 +344,36 @@ def practice_session(request):
             if score is None or total_questions == 0:
                 return Response({"error": "Missing required data: score and total_questions."}, status=400)
 
-            # Process the data here...
-            # For example, you can save it or log it to a database.
-            print(f"Score: {score}/{total_questions} for user {user.username}")
+            # Get or create the UserAttempt object for the current user
+            user_attempt, created = UserAttempt.objects.get_or_create(user=user)
 
-            return Response({"message": "Practice session recorded successfully.", "score": f"{score}/{total_questions}"})
+            # Increment practice count
+            user_attempt.practice_count += 1
+            user_attempt.save()
+
+            # Create AttemptDetail record for this practice session
+            attempt_detail = AttemptDetail.objects.create(
+                user_attempt=user_attempt,
+                attempt_type="Practice",
+                score=score,
+                total_questions=total_questions
+            )
+
+            # Return a response with success message
+            return Response({
+                "message": "Practice session recorded successfully.",
+                "score": f"{score}/{total_questions}",
+                "attempt_detail": str(attempt_detail)
+            })
+        
+        except IntegrityError as e:
+            print(f"Integrity Error: {e}")
+            return Response({"error": "Database error occurred while processing your request."}, status=500)
         except Exception as e:
             print(f"Error: {e}")
             return Response({"error": "An error occurred while processing your request."}, status=500)
     else:
         return Response({"error": "User must be logged in."}, status=401)
-
 
 
 
@@ -450,26 +449,3 @@ class LogoutView(APIView):
 
 
 
-# @api_view(['POST'])
-# @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
-# def practice_session(request):
-#     print(f"Authenticated User: {request.user}")  # Log authenticated user
-#     if request.user.is_authenticated:
-#         try:
-#             user = request.user
-#             score = request.data.get('score')
-#             total_questions = request.data.get('total_questions', 0)
-
-#             if score is None or total_questions == 0:
-#                 return Response({"error": "Missing required data: score and total_questions."}, status=400)
-
-#             # Process the data here...
-#             # For example, you can save it or log it to a database.
-#             print(f"Score: {score}/{total_questions} for user {user.username}")
-
-#             return Response({"message": "Practice session recorded successfully.", "score": f"{score}/{total_questions}"})
-#         except Exception as e:
-#             print(f"Error: {e}")
-#             return Response({"error": "An error occurred while processing your request."}, status=500)
-#     else:
-#         return Response({"error": "User must be logged in."}, status=401)

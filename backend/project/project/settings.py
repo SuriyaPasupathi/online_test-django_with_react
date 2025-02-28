@@ -99,8 +99,8 @@ SIMPLE_JWT = {
 # Update CORS settings for production
 CORS_ALLOW_ALL_ORIGINS = False  # Disable for production
 CORS_ALLOWED_ORIGINS = [
-    "http://your-production-domain.com",  # Add your production domain
-    "https://your-production-domain.com",
+    "http://localhost:3000",  # Add your production domain
+    "http://localhost:5173",
 ]
 
 CORS_ALLOW_METHODS = [
