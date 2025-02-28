@@ -1,191 +1,165 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-// Create axios instance with default config
-const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api',
-  timeout: 5000,
-  headers: {
-    'Content-Type': 'application/json',
-  }
-});
+const PracticePage = () => {
+    const [questions, setQuestions] = useState([]);
+    const [answers, setAnswers] = useState({});
+    const [incorrectAnswers, setIncorrectAnswers] = useState({});
+    const [lastCorrectAnswers, setLastCorrectAnswers] = useState({}); // changed from correctAnswers to lastCorrectAnswers
+    const [level, setLevel] = useState(null);
+    const [section, setSection] = useState(1);
+    const [testCompleted, setTestCompleted] = useState(false);
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const [totalScore, setTotalScore] = useState(0);
+    const [totalQuestions, setTotalQuestions] = useState(0);
 
-// Add request interceptor
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    console.log('API Request:', {
-      url: config.url,
-      method: config.method,
-      headers: config.headers,
-      data: config.data
-    });
-    return config;
-  },
-  (error) => {
-    console.error('Request Error:', error);
-    return Promise.reject(error);
-  }
-);
-
-// Add response interceptor
-api.interceptors.response.use(
-  (response) => {
-    console.log('API Response:', {
-      status: response.status,
-      data: response.data
-    });
-    return response;
-  },
-  async (error) => {
-    console.error('Response Error:', {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
-
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (refreshToken) {
-        try {
-          const response = await axios.post('http://127.0.0.1:8000/api/token/refresh/', {
-            refresh: refreshToken
-          });
-          const newAccessToken = response.data.access;
-          localStorage.setItem('access_token', newAccessToken);
-          
-          // Retry the original request
-          error.config.headers.Authorization = `Bearer ${newAccessToken}`;
-          return api(error.config);
-        } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          window.location.href = '/Login_page';
+    useEffect(() => {
+        if (level !== null) {
+            fetchQuestions();
         }
-      }
-    }
-    return Promise.reject(error);
-  }
-);
+    }, [level, section]);
 
-const Home = () => {
-  const navigate = useNavigate();
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const accessToken = localStorage.getItem("access_token");
-        if (!accessToken) {
-          navigate("/Login_page");
-          return;
-        }
-
-        // Verify token is valid
-        await api.get('/verify-token/');
-      } catch (error) {
-        console.error('Authentication check failed:', error);
-        if (error.response?.status === 401) {
-          navigate("/Login_page");
-        } else {
-          setError('Server connection error. Please try again later.');
-        }
-      }
+    const fetchQuestions = () => {
+        axios.get(`http://localhost:8000/api/questions/${level}/${section}/`)
+            .then((response) => {
+                setQuestions(response.data.questions);
+                setAnswers({});
+                setIncorrectAnswers((prev) => ({ ...prev, [section]: {} }));
+                setLastCorrectAnswers((prev) => ({ ...prev, [section]: {} })); // reset lastCorrectAnswers
+                setCurrentQuestionIndex(0);
+                setTotalQuestions((prev) => prev + response.data.questions.length); // Track total questions
+            })
+            .catch((error) => console.error("Error fetching questions:", error));
     };
 
-    checkAuth();
-  }, [navigate]);
+    const handleAnswerChange = (questionId, value) => {
+        setAnswers((prev) => ({
+            ...prev,
+            [questionId]: value,
+        }));
+    };
 
-  const handlePracticeSession = () => {
-    navigate("/abacus_question");
-  };
+    const handleSubmit = () => {
+        axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers })
+            .then((response) => {
+                const { incorrect_answers, correct_answers } = response.data;
+                setIncorrectAnswers((prev) => ({ ...prev, [section]: incorrect_answers }));
+                setLastCorrectAnswers((prev) => ({ ...prev, [section]: correct_answers })); // save last correct answers
 
-  const handleTestSession = () => {
-    navigate("/test_session");
-  };
+                const correctCount = Object.keys(correct_answers).length;
+                setTotalScore((prev) => prev + correctCount); // Update total correct count
 
-  const handleLogout = async () => {
-    try {
-      const refreshToken = localStorage.getItem("refresh_token");
-      await api.post("/logout/", { refresh_token: refreshToken });
-      
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      
-      alert("You have been logged out successfully.");
-      navigate("/Login_page");
-    } catch (error) {
-      console.error("Logout failed:", error);
-      
-      // Force logout on client side even if API call fails
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      
-      alert("Logout completed with some errors. Please refresh the page.");
-      navigate("/Login_page");
-    }
-  };
+                if (section === 2) {
+                    const token = localStorage.getItem("access_token");
+                    if (!token) {
+                        window.location.href = '/login';
+                        return;
+                    }
 
-  return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-      {error && (
-        <div className="absolute top-0 w-full bg-red-500 text-white p-3 text-center">
-          {error}
+                    axios.post("http://localhost:8000/api/practice_session/", 
+                        { score: totalScore + correctCount, total_questions: totalQuestions }, 
+                        { headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" } }
+                    )
+                    .then(() => {
+                        setTestCompleted(true);
+                        alert(`Your total score is: ${totalScore + correctCount}/${totalQuestions}`);
+                    })
+                    .catch((error) => console.error("Error updating practice session:", error));
+                } else {
+                    setSection(2); // Move to Section 2
+                }
+            })
+            .catch((error) => console.error("Error submitting answers:", error));
+    };
+
+    const handleLevelChange = (selectedLevel) => {
+        setLevel(selectedLevel);
+        setSection(1);
+        setTestCompleted(false);
+        setIncorrectAnswers({});
+        setLastCorrectAnswers({}); // reset lastCorrectAnswers
+        setTotalScore(0);
+        setTotalQuestions(0);
+    };
+
+    const handleBack = () => {
+        setLevel(null);
+        setTestCompleted(false);
+        setSection(1);
+    };
+
+    const handlePaginationClick = (index) => {
+        setCurrentQuestionIndex(index);
+    };
+
+    return (
+        <div className="container mx-auto p-4">
+            <h1 className="text-2xl font-bold mb-4 text-center">Abacus Test</h1>
+            {level === null ? (
+                <div className="mb-4 text-center">
+                    {[1, 2, 3].map((lvl) => (
+                        <button key={lvl} onClick={() => handleLevelChange(lvl)} className="bg-blue-500 text-white px-4 py-2 rounded mr-2">
+                            Level {lvl}
+                        </button>
+                    ))}
+                </div>
+            ) : !testCompleted ? (
+                <div>
+                    <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
+                    {questions.length > 0 && (
+                        <div className="p-4 border rounded shadow">
+                            <p className="text-lg font-semibold">{questions[currentQuestionIndex]?.question_text}</p>
+                            <input
+                                type="text"
+                                onChange={(e) => handleAnswerChange(questions[currentQuestionIndex]?.id, e.target.value)}
+                                value={answers[questions[currentQuestionIndex]?.id] || ""}
+                                className="border p-2 w-full mt-2 rounded"
+                                placeholder="Enter your answer"
+                            />
+                        </div>
+                    )}
+
+                    {/* Pagination Buttons */}
+                    <div className="flex justify-center mt-4">
+                        {questions.map((_, index) => (
+                            <button
+                                key={index}
+                                onClick={() => handlePaginationClick(index)}
+                                className={`px-4 py-2 rounded mx-1 ${currentQuestionIndex === index ? 'bg-blue-500 text-white' : 'bg-gray-300'}`}
+                            >
+                                {index + 1}
+                            </button>
+                        ))}
+                    </div>
+
+                    {Object.keys(answers).length === questions.length && (
+                        <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded mt-4">
+                            Submit Section {section}
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className="p-6 border rounded shadow bg-gray-100 text-center">
+                    <h2 className="text-xl font-bold">Level {level} Completed</h2>
+                    <p className="text-lg text-green-600">Total Correct Answers: {totalScore}/{totalQuestions}</p>
+                    {[1, 2].map((sec) => (
+                        <div key={sec} className="mt-4">
+                            <h2 className="text-xl font-semibold">Section {sec} Incorrect Answers</h2>
+                            {Object.keys(incorrectAnswers[sec] || {}).length > 0 ? (
+                                Object.entries(incorrectAnswers[sec]).map(([questionId, userAnswer]) => (
+                                    <div key={questionId} className="p-4 border rounded shadow">
+                                        <p className="text-red-500">❌ Your Answer: {userAnswer}</p>
+                                        <p className="text-green-500">✔ Correct Answer: {lastCorrectAnswers[sec]?.[questionId]}</p> {/* Display last correct answer */}
+                                    </div>
+                                ))
+                            ) : <p className="text-gray-600">No incorrect answers!</p>}
+                        </div>
+                    ))}
+                    <button onClick={handleBack} className="mt-4 bg-gray-500 text-white px-4 py-2 rounded">Back</button>
+                </div>
+            )}
         </div>
-      )}
-
-      <h1 className="absolute top-6 text-xl sm:text-xl md:text-xl lg:text-4xl font-bold text-gray-900 text-center mb-6">
-        Online Abacus Test
-      </h1>
-
-      {/* Notification Button */}
-      <button className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-red-600">
-        🔔 Notifications
-      </button>
-
-      {/* Logout Button */}
-      <button
-        onClick={handleLogout}
-        className="absolute top-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-md hover:bg-gray-900"
-      >
-        Logout
-      </button>
-
-      {/* Image Section */}
-      <div className="relative w-full max-w-3xl px-2">
-        <img
-          src="https://media.istockphoto.com/id/968852086/photo/happy-teacher-and-kids-learning-to-count-on-abacus-at-preschool.jpg?s=612x612&w=0&k=20&c=KGJytQqvptIHtEFePsQhIqckbCoXyuDBHNLHINpOe5A="
-          alt="Abacus Learning"
-          className="rounded-lg shadow-lg w-full h-auto"
-        />
-        <p className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-black text-lg sm:text-xl md:text-2xl font-['Roboto'] italic px-4 py-2 whitespace-nowrap">
-          You can learn something new every day
-        </p>
-      </div>
-
-      {/* Bottom Right Buttons */}
-      <div className="absolute bottom-4 right-4 flex flex-col sm:flex-row gap-4">
-        <button
-          onClick={handlePracticeSession}
-          className="bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600"
-        >
-          Practice Session
-        </button>
-        <button
-          onClick={handleTestSession}
-          className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-green-600"
-        >
-          Test Session
-        </button>
-      </div>
-    </div>
-  );
+    );
 };
 
-export default Home;
+export default PracticePage;
