@@ -227,7 +227,7 @@ class Validate_answer(View):
             correct_answers = {}
 
             # Fetch all questions for this level and section
-            questions = AbacusTest.objects.filter(level=level_id, section=section_id)
+            questions = session.objects.filter(level=level_id, section=section_id)
             total_questions = questions.count()  # Get the exact number of questions posted by admin
 
             # Validate submitted answers
@@ -353,11 +353,10 @@ def practice_session(request):
     else:
         return Response({"error": "User must be logged in."}, status=401)
 
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
-
-@csrf_exempt  # Use this only if CSRF issues occur in testing (not recommended for production)
-
 def test_session(request):
     print(f"Authenticated User: {request.user}")  # Log authenticated user
     if request.user.is_authenticated:
