@@ -17,7 +17,7 @@ import json
 from django.views import View
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.contrib.auth.decorators import login_required
 from .serializers import TestSerializer
 import random
 from django.contrib.auth import authenticate
@@ -200,24 +200,20 @@ class SubmitAnswersView(View):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
-@api_view(['GET'])
-@permission_classes([AllowAny])  # Allow public access
-def get_random_questions(request, level_id, section_id):
-    """
-    Get random questions for the specified level and section.
-    """
-    questions = list(session.objects.filter(level=level_id, section=section_id))
-    
-    if not questions:
-        return Response({"error": "No questions available for this level and section."}, status=404)
+class Get_random_questions(View):
+    def get(self, request, level_id, section_id, *args, **kwargs):
+        # Fetch the questions based on level and section
+        questions = session.objects.filter(level=level_id, section=section_id)
 
-    random.shuffle(questions)  # Shuffle to get random questions
-    serialized_questions = TestSerializer(questions, many=True)
+        # Prepare data to return
+        questions_data = [{"id": question.id, "question_text": question.question_text} for question in questions]
 
-    return Response(serialized_questions.data)
+        return JsonResponse({"questions": questions_data}, status=200)
+
+
 
 @method_decorator(csrf_exempt, name='dispatch')
-class validate_answer(View):
+class Validate_answer(View):
     def post(self, request, level_id, section_id, *args, **kwargs):
         try:
             data = json.loads(request.body)
@@ -231,7 +227,7 @@ class validate_answer(View):
             correct_answers = {}
 
             # Fetch all questions for this level and section
-            questions = session.objects.filter(level=level_id, section=section_id)
+            questions = AbacusTest.objects.filter(level=level_id, section=section_id)
             total_questions = questions.count()  # Get the exact number of questions posted by admin
 
             # Validate submitted answers
@@ -269,6 +265,9 @@ class validate_answer(View):
             return JsonResponse({"error": "Invalid JSON format."}, status=400)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
+
+
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow public access
