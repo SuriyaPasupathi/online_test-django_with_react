@@ -202,13 +202,19 @@ class SubmitAnswersView(View):
 
 class Get_random_questions(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
-        # Fetch the questions based on level and section
+        # Fetch questions based on level and section
         questions = session.objects.filter(level=level_id, section=section_id)
 
-        # Prepare data to return
-        questions_data = [{"id": question.id, "question_text": question.question_text} for question in questions]
+        # Get time_limit from the first question, otherwise default to 600 seconds
+        time_limit = questions.first().time_limit if questions.exists() else 600  
 
-        return JsonResponse({"questions": questions_data}, status=200)
+        # Prepare data to return
+        questions_data = [
+            {"id": question.id, "question_text": question.question_text, "correct_answer": question.correct_answer} 
+            for question in questions
+        ]
+
+        return JsonResponse({"questions": questions_data, "time_limit": time_limit}, status=200)
 
 
 
@@ -273,7 +279,7 @@ class Validate_answer(View):
 @permission_classes([AllowAny])  # Allow public access
 def get_test_notification(request):
     """
-    Get the test notification message and start time with a countdown.
+    Get the test notification message, start time, current date, and countdown.
     """
     # Fetch the latest active notification
     notification = TestNotification.objects.filter(is_active=True).last()
@@ -287,17 +293,30 @@ def get_test_notification(request):
     # Get the start date from the TestNotification model
     test_start_time = notification.start_date
 
+    # Get current date (timezone-aware)
+    current_date = now.date()
+
+    # Format the test start date as "dd.mm.yyyy"
+    formatted_start_date = test_start_time.strftime("%d.%m.%Y")
+
     # Compare current time with test start time
     if now < test_start_time:
         # Calculate remaining time until the test starts
         time_remaining = (test_start_time - now).total_seconds()
-        minutes_remaining = int(time_remaining // 60)
+        
+        # Round the remaining time to the nearest whole number
+        time_remaining = round(time_remaining)
+
+        hours_remaining = int(time_remaining // 3600)
+        minutes_remaining = int((time_remaining % 3600) // 60)
         seconds_remaining = int(time_remaining % 60)
 
         return Response({
             "message": notification.message,
             "start_time": test_start_time.isoformat(),  # Convert to ISO format for frontend
-            "start_message": f"Test will start in {minutes_remaining} minutes and {seconds_remaining} seconds.",
+            "start_message": f"Your test will begin on {formatted_start_date}",
+            "countdown": f"{hours_remaining:02}:{minutes_remaining:02}:{seconds_remaining:02}",
+            "current_date": current_date.isoformat(),  # Include current date
             "time_remaining_seconds": time_remaining  # Useful for frontend countdown
         }, status=status.HTTP_200_OK)
     
@@ -305,9 +324,9 @@ def get_test_notification(request):
     return Response({
         "message": notification.message,
         "start_time": test_start_time.isoformat(),
-        "start_message": "Test is now available!"
-    }, status=status.HTTP_200_OK)
-
+        "start_message": "Test is now available!",
+        "current_date": current_date.isoformat()  # Include current date
+    }, status=status.HTTP_200_OK)  
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view

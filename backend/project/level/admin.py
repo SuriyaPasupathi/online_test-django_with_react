@@ -60,6 +60,7 @@ class AbacusTestAdmin(admin.ModelAdmin):
 class sessionAdmin(admin.ModelAdmin):
     list_display = ('level', 'section', 'question_text', 'time_limit', 'correct_answer')
     search_fields = ('question_text', 'level', 'section')
+    list_editable = ('time_limit',)
 
 admin.site.register(session, sessionAdmin)
 

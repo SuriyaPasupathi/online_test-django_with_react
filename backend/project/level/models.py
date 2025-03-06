@@ -76,7 +76,7 @@ class session(models.Model):
     section = models.IntegerField(choices=SECTION_CHOICES)
     question_text = models.CharField(max_length=100)
     correct_answer = models.CharField(max_length=10)
-    time_limit = models.IntegerField(help_text="Time limit in seconds")  # Time limit for each question
+    time_limit = models.IntegerField()    # Time limit for each question
 
     def __str__(self):
         return f"Level {self.level}, Section {self.section} - {self.question_text} (Time Limit: {self.time_limit}s)"

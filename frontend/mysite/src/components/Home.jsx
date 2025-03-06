@@ -1,9 +1,32 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 
 const Home = () => {
   const navigate = useNavigate();
+  const [notification, setNotification] = useState(null); // Store notification data
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Function to handle fetching test notifications
+  const handleNotificationClick = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/test_notification/");
+      const data = await response.json();
+
+      if (response.ok) {
+        setNotification(data);
+      } else {
+        setError(data.error || "Failed to fetch notification");
+      }
+    } catch (error) {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Function to handle Practice Session navigation
   const handlePracticeSession = () => {
@@ -17,60 +40,56 @@ const Home = () => {
 
   const handleLogout = async () => {
     try {
-        const accessToken = localStorage.getItem('access_token');
-        const refreshToken = localStorage.getItem('refresh_token');
+      const accessToken = localStorage.getItem("access_token");
+      const refreshToken = localStorage.getItem("refresh_token");
 
-        console.log('Sending logout request...');
-        
-        if (!accessToken || !refreshToken) {
-            console.error('No tokens found');
-            window.location.href = '/login_page';
-            return;
-        }
+      if (!accessToken || !refreshToken) {
+        window.location.href = "/login_page";
+        return;
+      }
 
-        try {
-            const response = await fetch('http://localhost:8000/api/logout/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify({
-                    refresh: refreshToken
-                })
-            });
+      const response = await fetch("http://localhost:8000/api/logout/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
 
-            console.log('Response status:', response.status);
-            const data = await response.json().catch(() => null);
-            console.log('Response data:', data);
-
-            if (response.ok) {
-                // Don't clear localStorage, just redirect
-                window.location.href = '/login_page';
-                console.log('Logout successful');
-            } else {
-                console.error('Logout failed:', data);
-            }
-        } catch (error) {
-            console.error('Logout request failed:', error);
-        }
+      if (response.ok) {
+        window.location.href = "/login_page";
+      }
     } catch (error) {
-        console.error('Logout error:', error);
-        window.location.href = '/Register_page';
+      window.location.href = "/Register_page";
     }
   };
 
-  
   return (
     <div className="relative flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
       <h1 className="absolute top-6 text-xl sm:text-xl md:text-xl lg:text-4xl font-bold text-gray-900 text-center mb-6">
         Online Abacus Test
       </h1>
 
-      {/* Notification Button */}
-      <button className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-red-600">
-        🔔 Notifications
-      </button>
+      {/* Notification Button with Notification Message Below */}
+      <div className="absolute top-4 left-4">
+        <button
+          onClick={handleNotificationClick}
+          className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-red-600"
+        >
+          🔔 Notifications
+        </button>
+
+        {/* Display Notification Message Below Button */}
+        {loading && <p className="text-gray-700 mt-2">Loading notification...</p>}
+        {error && <p className="text-red-500 mt-2">{error}</p>}
+        {notification && (
+          <div className="absolute top-full mt-2 w-72 bg-white p-3 rounded-lg shadow-md border border-gray-300">
+            <p className="text-lg font-semibold">{notification.message}</p>
+            <p className="text-sm text-gray-600">{notification.start_message}</p>
+          </div>
+        )}
+      </div>
 
       {/* Logout Button */}
       <button
