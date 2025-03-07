@@ -26,6 +26,7 @@ from .utils import get_tokens_for_user
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import IntegrityError
 from rest_framework_simplejwt.tokens import TokenError
+from django.utils.timezone import localtime
 
 logger = logging.getLogger(__name__) # Set up logger
 class RegisterView(APIView):
@@ -279,7 +280,7 @@ class Validate_answer(View):
 @permission_classes([AllowAny])  # Allow public access
 def get_test_notification(request):
     """
-    Get the test notification message and formatted date & time.
+    Get the test notification message and compare the scheduled time with the system time.
     """
     # Fetch the latest active notification
     notification = TestNotification.objects.filter(is_active=True).last()
@@ -287,16 +288,26 @@ def get_test_notification(request):
     if not notification:
         return Response({"error": "No active test notification found."}, status=status.HTTP_404_NOT_FOUND)
 
+    # Convert the scheduled test time to local time
+    notification_time = localtime(notification.start_date)
+
     # Format date as "dd.mm.yyyy"
-    formatted_date = notification.start_date.strftime("%d.%m.%Y")
+    formatted_date = notification_time.strftime("%d.%m.%Y")
 
     # Format time as "hh:mm AM/PM"
-    formatted_time = notification.start_date.strftime("%I:%M %p")  # 10:30 AM format
+    formatted_time = notification_time.strftime("%I:%M %p")  # 12-hour format
+
+    # Compare scheduled test time with current system time
+    current_time = localtime().strftime("%Y-%m-%d %H:%M:%S")
+    notification_time_str = notification_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    is_time_reached = notification_time_str <= current_time
 
     return Response({
         "message": notification.message,
         "formatted_date": formatted_date,
-        "formatted_time": formatted_time
+        "formatted_time": formatted_time,
+        "is_time_reached": is_time_reached  # Boolean flag to start the test automatically
     }, status=status.HTTP_200_OK)
 
 

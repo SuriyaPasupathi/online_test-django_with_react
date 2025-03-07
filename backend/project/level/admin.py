@@ -3,6 +3,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from .models import User,AbacusTest,session,TestNotification,UserAttempt, AttemptDetail
 from django.db.models import Sum
+from django.utils.formats import date_format
 
 
 
@@ -63,12 +64,16 @@ class sessionAdmin(admin.ModelAdmin):
     list_editable = ('time_limit',)
 
 admin.site.register(session, sessionAdmin)
-
 class TestNotificationAdmin(admin.ModelAdmin):
-    list_display = ('message', 'start_date', 'is_active')
+    list_display = ('message', 'start_date', 'start_time_display', 'is_active')
     list_filter = ('is_active',)
     search_fields = ('message',)
-    date_hierarchy = 'start_date'  # Allows you to filter by date
+    date_hierarchy = 'start_date'
+
+    def start_time_display(self, obj):
+        """Displays time in AM/PM format in the admin panel."""
+        return date_format(obj.start_date, "h:i A")  # 12-hour format with AM/PM
+    start_time_display.short_description = "Start Time"
 
 admin.site.register(TestNotification, TestNotificationAdmin)
 
