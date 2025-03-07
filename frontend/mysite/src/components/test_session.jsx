@@ -12,42 +12,52 @@ const TestQuestion = () => {
     const [totalIncorrect, setTotalIncorrect] = useState(0);
     const [finalScore, setFinalScore] = useState(0);
     const [notification, setNotification] = useState(null);
-    const [countdown, setCountdown] = useState(null);
     const [testTimer, setTestTimer] = useState(null);
+    const [isTestRunning, setIsTestRunning] = useState(false);
+    const [startTime, setStartTime] = useState(null);
+    const [isTimeReached, setIsTimeReached] = useState(false);
+    const [currentTime, setCurrentTime] = useState(new Date());
 
-    // Fetch the test notification before the test starts
+    // Fetch test notification and scheduled start time
     useEffect(() => {
         axios.get("http://localhost:8000/api/test_notification/")
             .then((response) => {
                 setNotification(response.data);
-                setCountdown(response.data.time_remaining_seconds);
+                const startDate = new Date(response.data.start_time);  // Convert to Date object
+                setStartTime(startDate);
             })
-            .catch((error) => {
-                console.error("Error fetching test notification:", error);
-            });
+            .catch((error) => console.error("Error fetching test notification:", error));
     }, []);
 
-    // Handle countdown for the notification
+    // Update the current time every second
     useEffect(() => {
-        if (countdown !== null && countdown > 0) {
-            const timer = setInterval(() => {
-                setCountdown((prev) => prev - 1);
-            }, 1000);
-            return () => clearInterval(timer);
-        } else if (countdown === 0) {
-            fetchQuestions();
-        }
-    }, [countdown]);
+        const interval = setInterval(() => {
+            setCurrentTime(new Date());  // Update current time every second
+        }, 1000);
+        
+        return () => clearInterval(interval);
+    }, []);
 
-    // Fetch questions once countdown reaches 0
+    // Check if the time has reached for the test to start
+    useEffect(() => {
+        if (startTime && currentTime >= startTime) {
+            setIsTimeReached(true);  // Allow test to be started
+        } else {
+            setIsTimeReached(false); // Disable start if the time hasn't reached
+        }
+    }, [currentTime, startTime]);
+
+    // Fetch questions when test starts
     const fetchQuestions = () => {
+        if (!isTimeReached) return; // Prevent starting before time
         axios.get(`http://localhost:8000/api/random_questions/${level}/${section}/`)
             .then((response) => {
                 setQuestions(response.data.questions);
                 setAnswers({});
                 setCurrentQuestionIndex(0);
                 setTotalQuestions((prev) => prev + response.data.questions.length);
-                setTestTimer(response.data.time_limit); // Set test timer from API
+                setTestTimer(response.data.time_limit);
+                setIsTestRunning(true);
             })
             .catch((error) => console.error("Error fetching questions:", error));
     };
@@ -64,6 +74,7 @@ const TestQuestion = () => {
         }
     }, [testTimer]);
 
+    // Handle the changes in the answer input field
     const handleAnswerChange = (questionId, value) => {
         setAnswers((prev) => ({
             ...prev,
@@ -71,6 +82,7 @@ const TestQuestion = () => {
         }));
     };
 
+    // Handle the submission of answers
     const handleSubmit = () => {
         axios.post(`http://localhost:8000/api/validate_answers/${level}/${section}/`, { answers })
             .then((response) => {
@@ -85,9 +97,11 @@ const TestQuestion = () => {
                     } else {
                         setLevel(level + 1);
                         setSection(1);
+                        fetchQuestions();
                     }
                 } else {
                     setSection(2);
+                    fetchQuestions();
                 }
             })
             .catch((error) => console.error("Error submitting answers:", error));
@@ -97,21 +111,25 @@ const TestQuestion = () => {
         <div className="container mx-auto p-4">
             <h1 className="text-2xl font-bold mb-4 text-center">Abacus Test</h1>
 
-            {/* Show Notification before starting the test */}
-            {notification && countdown > 0 && (
-    <div className="bg-yellow-100 p-4 border border-yellow-300 rounded mb-4">
-        <p className="text-lg font-semibold">{notification.start_message}</p>
-    
-        <p className="text-sm text-gray-600">
-            Countdown: {String(Math.floor(countdown / 3600)).padStart(2, '0')}:
-            {String(Math.floor((countdown % 3600) / 60)).padStart(2, '0')}:
-            {String(countdown % 60).padStart(2, '0')}
-        </p>
-    </div>
-)}
+            {notification && (
+                <div className="bg-yellow-100 p-4 border border-yellow-300 rounded mb-4 text-center">
+                    <p className="text-lg font-semibold">{notification.message}</p>
+                    <p className="text-sm text-gray-600">Date: {notification.formatted_date}</p>
+                    <p className="text-sm text-gray-600">Time: {notification.formatted_time}</p>
+                </div>
+            )}
 
-            {/* Display questions only after countdown reaches 0 */}
-            {countdown === 0 && !testCompleted && (
+            {!isTestRunning && (
+                <button 
+                    onClick={fetchQuestions} 
+                    className={`px-4 py-2 rounded mt-4 ${isTimeReached ? "bg-green-500 text-white" : "bg-gray-400 text-gray-700 cursor-not-allowed"}`}
+                    disabled={!isTimeReached}
+                >
+                    {isTimeReached ? "Start Test" : "Test Starts Soon"}
+                </button>
+            )}
+
+            {isTestRunning && !testCompleted && (
                 <div>
                     <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
 

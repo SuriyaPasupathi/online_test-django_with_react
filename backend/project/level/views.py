@@ -279,7 +279,7 @@ class Validate_answer(View):
 @permission_classes([AllowAny])  # Allow public access
 def get_test_notification(request):
     """
-    Get the test notification message, start time, current date, and countdown.
+    Get the test notification message and formatted date & time.
     """
     # Fetch the latest active notification
     notification = TestNotification.objects.filter(is_active=True).last()
@@ -287,46 +287,19 @@ def get_test_notification(request):
     if not notification:
         return Response({"error": "No active test notification found."}, status=status.HTTP_404_NOT_FOUND)
 
-    # Get current time (timezone-aware)
-    now = timezone.now()
+    # Format date as "dd.mm.yyyy"
+    formatted_date = notification.start_date.strftime("%d.%m.%Y")
 
-    # Get the start date from the TestNotification model
-    test_start_time = notification.start_date
+    # Format time as "hh:mm AM/PM"
+    formatted_time = notification.start_date.strftime("%I:%M %p")  # 10:30 AM format
 
-    # Get current date (timezone-aware)
-    current_date = now.date()
-
-    # Format the test start date as "dd.mm.yyyy"
-    formatted_start_date = test_start_time.strftime("%d.%m.%Y")
-
-    # Compare current time with test start time
-    if now < test_start_time:
-        # Calculate remaining time until the test starts
-        time_remaining = (test_start_time - now).total_seconds()
-        
-        # Round the remaining time to the nearest whole number
-        time_remaining = round(time_remaining)
-
-        hours_remaining = int(time_remaining // 3600)
-        minutes_remaining = int((time_remaining % 3600) // 60)
-        seconds_remaining = int(time_remaining % 60)
-
-        return Response({
-            "message": notification.message,
-            "start_time": test_start_time.isoformat(),  # Convert to ISO format for frontend
-            "start_message": f"Your test will begin on {formatted_start_date}",
-            "countdown": f"{hours_remaining:02}:{minutes_remaining:02}:{seconds_remaining:02}",
-            "current_date": current_date.isoformat(),  # Include current date
-            "time_remaining_seconds": time_remaining  # Useful for frontend countdown
-        }, status=status.HTTP_200_OK)
-    
-    # If the test has started, allow access
     return Response({
         "message": notification.message,
-        "start_time": test_start_time.isoformat(),
-        "start_message": "Test is now available!",
-        "current_date": current_date.isoformat()  # Include current date
-    }, status=status.HTTP_200_OK)  
+        "formatted_date": formatted_date,
+        "formatted_time": formatted_time
+    }, status=status.HTTP_200_OK)
+
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view

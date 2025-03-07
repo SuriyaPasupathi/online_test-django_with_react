@@ -13,11 +13,11 @@ const Home = () => {
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:8000/api/test_notification/");
+      const response = await fetch("http://localhost:8000/api/test_notification/"); // Update API URL
       const data = await response.json();
 
       if (response.ok) {
-        setNotification(data);
+        setNotification(data); // Store notification data
       } else {
         setError(data.error || "Failed to fetch notification");
       }
@@ -71,25 +71,23 @@ const Home = () => {
         Online Abacus Test
       </h1>
 
-      {/* Notification Button with Notification Message Below */}
-      <div className="absolute top-4 left-4">
-        <button
-          onClick={handleNotificationClick}
-          className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-red-600"
-        >
-          🔔 Notifications
-        </button>
+      {/* Notification Button */}
+      <button
+        onClick={handleNotificationClick}
+        className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-red-600"
+      >
+        🔔 Notifications
+      </button>
 
-        {/* Display Notification Message Below Button */}
-        {loading && <p className="text-gray-700 mt-2">Loading notification...</p>}
-        {error && <p className="text-red-500 mt-2">{error}</p>}
-        {notification && (
-          <div className="absolute top-full mt-2 w-72 bg-white p-3 rounded-lg shadow-md border border-gray-300">
-            <p className="text-lg font-semibold">{notification.message}</p>
-            <p className="text-sm text-gray-600">{notification.start_message}</p>
-          </div>
-        )}
-      </div>
+      {/* Display Notification Message */}
+      {loading && <p className="text-gray-700 mt-4">Loading notification...</p>}
+      {error && <p className="text-red-500 mt-4">{error}</p>}
+      {notification && (
+        <div className="bg-white p-4 rounded-lg shadow-md mt-4">
+          <p className="text-lg font-semibold">{notification.message}</p>
+          <p className="text-sm text-gray-600">{notification.start_message}</p>
+        </div>
+      )}
 
       {/* Logout Button */}
       <button

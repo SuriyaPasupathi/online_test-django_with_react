@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from .models import  AbacusTest,AttemptDetail,UserAttempt
+from .models import  AbacusTest,AttemptDetail,UserAttempt,TestNotification
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -77,3 +77,21 @@ class UserAttemptSerializer(serializers.ModelSerializer):
 class LogoutResponseSerializer(serializers.Serializer):
     message = serializers.CharField(max_length=255)
     error = serializers.CharField(max_length=255, required=False)
+
+
+
+
+    
+class TestNotificationSerializer(serializers.ModelSerializer):
+    formatted_time_12hr = serializers.SerializerMethodField()
+    formatted_time_24hr = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TestNotification
+        fields = ['message', 'start_time', 'formatted_time_12hr', 'formatted_time_24hr']
+
+    def get_formatted_time_12hr(self, obj):
+        return obj.formatted_time_12hr()
+
+    def get_formatted_time_24hr(self, obj):
+        return obj.formatted_time_24hr()
