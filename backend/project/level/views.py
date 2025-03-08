@@ -29,7 +29,6 @@ from django.db import IntegrityError
 from rest_framework_simplejwt.tokens import TokenError
 from django.utils.timezone import localtime
 
-
 logger = logging.getLogger(__name__) # Set up logger
 class RegisterView(APIView):
     permission_classes = [AllowAny]  # Allow any user (unauthenticated)
@@ -206,7 +205,6 @@ class SubmitAnswersView(View):
             return JsonResponse({"error": "Invalid JSON format."}, status=400)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
-
 class Get_random_questions(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
         # Fetch questions based on level and section
@@ -222,9 +220,6 @@ class Get_random_questions(View):
         ]
 
         return JsonResponse({"questions": questions_data, "time_limit": time_limit}, status=200)
-
-
-
 @method_decorator(csrf_exempt, name='dispatch')
 class Validate_answer(View):
     def post(self, request, level_id, section_id, *args, **kwargs):
@@ -279,9 +274,6 @@ class Validate_answer(View):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
-
-
-
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow public access
 def get_test_notification(request):
@@ -315,8 +307,6 @@ def get_test_notification(request):
         "formatted_time": formatted_time,
         "is_time_reached": is_time_reached  # Boolean flag to start the test automatically
     }, status=status.HTTP_200_OK)
-
-
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
@@ -361,8 +351,6 @@ def practice_session(request):
             return Response({"error": "An error occurred while processing your request."}, status=500)
     else:
         return Response({"error": "User must be logged in."}, status=401)
-
-
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
@@ -441,8 +429,6 @@ class LogoutView(APIView):
                 {"error": str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-
 
 @api_view(['GET'])
 def check_test_status(request):

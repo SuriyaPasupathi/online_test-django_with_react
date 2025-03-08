@@ -5,9 +5,6 @@ from .models import User,AbacusTest,session,TestNotification,UserAttempt, Attemp
 from django.db.models import Sum
 from django.utils.formats import date_format
 
-
-
-
 class UserAdmin(admin.ModelAdmin):
     list_display = ('username', 'email', 'is_registered', 'is_approved')
     list_filter = ('is_registered', 'is_approved')
@@ -46,17 +43,6 @@ class AbacusTestAdmin(admin.ModelAdmin):
     list_filter = ('level', 'section')
     search_fields = ('question_text',)
 
-
-
-
-
-
-
-
-
-
-
-
 # Unregister if the model is already registered
 class sessionAdmin(admin.ModelAdmin):
     list_display = ('level', 'section', 'question_text', 'time_limit', 'correct_answer')
@@ -76,26 +62,10 @@ class TestNotificationAdmin(admin.ModelAdmin):
     start_time_display.short_description = "Start Time"
 
 admin.site.register(TestNotification, TestNotificationAdmin)
-
-
-
-
 class AttemptDetailInline(admin.TabularInline):
     model = AttemptDetail
     extra = 0  # Don't show empty forms
-    # Assuming 'question' is a ForeignKey and 'user_answer', 'correct_answer' are fields in AttemptDetail
-    readonly_fields = ('question', 'user_answer', 'correct_answer')
-
-    def question(self, obj):
-        # This is assuming 'question' is a ForeignKey to another model
-        return obj.question.text if obj.question else None
-
-    def user_answer(self, obj):
-        return obj.user_answer
-
-    def correct_answer(self, obj):
-        return obj.correct_answer
-
+    
 class UserAttemptAdmin(admin.ModelAdmin):
     list_display = ('user', 'practice_count', 'test_count', 'total_score')
     readonly_fields = ('user', 'practice_count', 'test_count', 'total_score')

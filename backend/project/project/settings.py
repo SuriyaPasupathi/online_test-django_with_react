@@ -49,7 +49,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework.authtoken',
     'rest_framework_simplejwt.token_blacklist',
-
     'level', 
 ]
 
@@ -99,8 +98,8 @@ SIMPLE_JWT = {
 # Update CORS settings for production
 CORS_ALLOW_ALL_ORIGINS = False  # Disable for production
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5174",  # Your React frontend (Vite default port)
-    "http://127.0.0.1:5174",  # Sometimes localhost works as 127.0.0.1
+    "http://localhost:5173",  # Your React frontend (Vite default port)
+    "http://127.0.0.1:5173",  # Sometimes localhost works as 127.0.0.1
 ]
 
 CORS_ALLOW_METHODS = [

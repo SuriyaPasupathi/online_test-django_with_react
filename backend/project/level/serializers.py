@@ -1,15 +1,9 @@
-
-
-
-
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from .models import  AbacusTest,AttemptDetail,UserAttempt,TestNotification,TestStatus
-
-
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -39,23 +33,14 @@ class AbacusTestSerializer(serializers.ModelSerializer):
     class Meta:
         model = AbacusTest
         fields = ['id', 'level', 'section', 'question_text', 'correct_answer', 'user', 'practice_count']
-
-
-
-
 class TestSerializer(serializers.ModelSerializer):
     class Meta:
         model = AbacusTest
         fields = ['id', 'question_text']  # Ensure correct fields
-
-
-
-
 class AttemptDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttemptDetail
         fields = ['attempt_type', 'score', 'timestamp']  # Specify the fields you want to include in the response
-
 class UserAttemptSerializer(serializers.ModelSerializer):
     # Include the related AttemptDetails in the UserAttempt serializer
     attempts = AttemptDetailSerializer(many=True, read_only=True)
@@ -77,11 +62,6 @@ class UserAttemptSerializer(serializers.ModelSerializer):
 class LogoutResponseSerializer(serializers.Serializer):
     message = serializers.CharField(max_length=255)
     error = serializers.CharField(max_length=255, required=False)
-
-
-
-
-    
 class TestNotificationSerializer(serializers.ModelSerializer):
     formatted_time_12hr = serializers.SerializerMethodField()
     formatted_time_24hr = serializers.SerializerMethodField()
@@ -95,8 +75,6 @@ class TestNotificationSerializer(serializers.ModelSerializer):
 
     def get_formatted_time_24hr(self, obj):
         return obj.formatted_time_24hr()
-    
-
 class TestStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestStatus
