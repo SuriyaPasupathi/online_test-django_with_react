@@ -6,7 +6,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User,AbacusTest,session,TestNotification, UserAttempt, AttemptDetail,UserLogoutLog
+from .models import User,AbacusTest,session,TestNotification, UserAttempt, AttemptDetail,TestStatus
 from rest_framework import status 
 from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
@@ -18,7 +18,8 @@ from django.views import View
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.decorators import login_required
-from .serializers import TestSerializer
+from .serializers import TestStatusSerializer
+from rest_framework.permissions import IsAdminUser
 import random
 from django.contrib.auth import authenticate
 from django.utils import timezone
@@ -27,6 +28,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import IntegrityError
 from rest_framework_simplejwt.tokens import TokenError
 from django.utils.timezone import localtime
+
 
 logger = logging.getLogger(__name__) # Set up logger
 class RegisterView(APIView):
@@ -96,18 +98,22 @@ class LoginView(APIView):
         username = request.data.get("username")
         password = request.data.get("password")
 
-        # Authenticate the user
         user = authenticate(username=username, password=password)
 
         if user is not None:
-            # Generate JWT token
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
 
-            return Response({"access_token": access_token}, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "access_token": access_token,
+                    "refresh_token": refresh_token
+                }, 
+                status=status.HTTP_200_OK
+            )
         
         return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
-
 @api_view(['POST'])
 def approve_user(request):
     """ Admin approves user and activates their account. """
@@ -435,4 +441,14 @@ class LogoutView(APIView):
                 {"error": str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+
+
+@api_view(['GET'])
+def check_test_status(request):
+    try:
+        test_status, created = TestStatus.objects.get_or_create(id=1)
+        serializer = TestStatusSerializer(test_status)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)

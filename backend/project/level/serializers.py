@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from .models import  AbacusTest,AttemptDetail,UserAttempt,TestNotification
+from .models import  AbacusTest,AttemptDetail,UserAttempt,TestNotification,TestStatus
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -95,3 +95,9 @@ class TestNotificationSerializer(serializers.ModelSerializer):
 
     def get_formatted_time_24hr(self, obj):
         return obj.formatted_time_24hr()
+    
+
+class TestStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TestStatus
+        fields = ['is_test_posted']

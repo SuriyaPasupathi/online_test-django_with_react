@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User,AbacusTest,session,TestNotification,UserAttempt, AttemptDetail
+from .models import User,AbacusTest,session,TestNotification,UserAttempt, AttemptDetail,TestStatus
 from django.db.models import Sum
 from django.utils.formats import date_format
 
@@ -116,3 +116,5 @@ class UserAttemptAdmin(admin.ModelAdmin):
 
 # Register the custom admin class
 admin.site.register(UserAttempt, UserAttemptAdmin)
+
+admin.site.register(TestStatus)

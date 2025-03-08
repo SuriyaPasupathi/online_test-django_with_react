@@ -116,4 +116,8 @@ class UserLogoutLog(models.Model):
         return f"User: {self.user.username} logged out at {self.logout_time}"
 
 
+class TestStatus(models.Model):
+    is_test_posted = models.BooleanField(default=False)
 
+    def __str__(self):
+        return "Test is posted" if self.is_test_posted else "Test is not posted"

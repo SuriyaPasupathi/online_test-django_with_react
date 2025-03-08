@@ -99,8 +99,8 @@ SIMPLE_JWT = {
 # Update CORS settings for production
 CORS_ALLOW_ALL_ORIGINS = False  # Disable for production
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Add your production domain
-    "http://localhost:5173",
+    "http://localhost:5174",  # Your React frontend (Vite default port)
+    "http://127.0.0.1:5174",  # Sometimes localhost works as 127.0.0.1
 ]
 
 CORS_ALLOW_METHODS = [

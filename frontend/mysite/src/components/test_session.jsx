@@ -15,11 +15,17 @@ const TestQuestion = () => {
     const [testTimer, setTestTimer] = useState(null);
     const [isTestRunning, setIsTestRunning] = useState(false);
     const [finalScore, setFinalScore] = useState(0);
+    const [testStarted, setTestStarted] = useState(false); // State to track test start
+    const [errorMessage, setErrorMessage] = useState(""); // State for error message
 
+    // Fetch questions when the test starts or level/section changes
     useEffect(() => {
-        fetchQuestions();
-    }, [level, section]);
+        if (testStarted) {
+            fetchQuestions();
+        }
+    }, [testStarted, level, section]);
 
+    // Submit score when the test is completed
     useEffect(() => {
         if (testCompleted) {
             axios
@@ -40,13 +46,43 @@ const TestQuestion = () => {
         }
     }, [testCompleted]);
 
+    const handleStartTest = () => {
+        const token = localStorage.getItem("access_token");
+    
+        if (!token) {
+            setErrorMessage("Please log in to start the test.");
+            return;
+        }
+    
+        axios
+            .get("http://localhost:8000/api/test_status/", {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            })
+            .then((response) => {
+                if (response.data.is_test_posted) {
+                    setTestStarted(true);
+                    setErrorMessage(""); 
+                    fetchQuestions();
+                } else {
+                    setErrorMessage("Test cannot be started. It has not been posted by the admin yet.");
+                }
+            })
+            .catch((error) => {
+                setErrorMessage("Error checking test status. Please try again.");
+                console.error("Error checking test status:", error);
+            });
+    };
+
+    // Timer effect to handle automatic section change
     useEffect(() => {
         if (testTimer !== null && testTimer > 0) {
             const timerInterval = setInterval(() => {
                 setTestTimer((prev) => {
                     if (prev <= 1) {
                         clearInterval(timerInterval);
-                        handleSubmit();
+                        handleSubmit(); // Automatically submit when time runs out
                     }
                     return prev - 1;
                 });
@@ -55,27 +91,37 @@ const TestQuestion = () => {
         }
     }, [testTimer]);
 
+    // Fetch questions for the current level and section
     const fetchQuestions = () => {
         axios
             .get(`http://localhost:8000/api/random_questions/${level}/${section}/`)
             .then((response) => {
-                setQuestions(response.data.questions);
-                setAnswers({});
-                setIncorrectAnswers({});
-                setCorrectAnswers({});
-                setCurrentQuestionIndex(0);
+                if (response.data.questions && response.data.questions.length > 0) {
+                    setQuestions(response.data.questions);
+                    setAnswers({});
+                    setIncorrectAnswers({});
+                    setCorrectAnswers({});
+                    setCurrentQuestionIndex(0);
+                    setErrorMessage(""); // Clear error message if questions are fetched successfully
 
-                if (level === 1 && section === 1) {
-                    setTotalQuestions(0);
-                    setTotalIncorrect(0);
+                    if (level === 1 && section === 1) {
+                        setTotalQuestions(0);
+                        setTotalIncorrect(0);
+                    }
+                    setTotalQuestions((prev) => prev + response.data.questions.length);
+                    setTestTimer(response.data.time_limit);
+                    setIsTestRunning(true);
+                } else {
+                    setErrorMessage("Failed to load questions. Please try again.");
                 }
-                setTotalQuestions((prev) => prev + response.data.questions.length);
-                setTestTimer(response.data.time_limit);
-                setIsTestRunning(true);
             })
-            .catch((error) => console.error("Error fetching questions:", error));
+            .catch((error) => {
+                setErrorMessage("An error occurred while fetching questions.");
+                console.error("Error fetching questions:", error);
+            });
     };
 
+    // Handle changes in answers
     const handleAnswerChange = (questionId, value) => {
         setAnswers((prev) => ({
             ...prev,
@@ -83,6 +129,7 @@ const TestQuestion = () => {
         }));
     };
 
+    // Submit answers and move to the next section or level
     const handleSubmit = () => {
         axios
             .post(`http://localhost:8000/api/validate_answers/${level}/${section}/`, { answers })
@@ -95,15 +142,18 @@ const TestQuestion = () => {
                 setTotalIncorrect((prev) => prev + incorrectCount);
 
                 if (level === 3 && section === 2) {
+                    // Final section, show final score
                     const finalScore = totalQuestions - (totalIncorrect + incorrectCount);
                     setFinalScore(finalScore);
                     setTestCompleted(true);
                     alert(`Your final score is: ${finalScore}/${totalQuestions}`);
                 } else {
                     if (section === 2) {
+                        // Move to next level and reset section to 1
                         setLevel(level + 1);
                         setSection(1);
                     } else {
+                        // Move to the next section
                         setSection(2);
                     }
                 }
@@ -111,6 +161,7 @@ const TestQuestion = () => {
             .catch((error) => console.error("Error submitting answers:", error));
     };
 
+    // Reset the test to start from the beginning
     const handleBack = () => {
         setTestCompleted(false);
         setLevel(1);
@@ -122,7 +173,20 @@ const TestQuestion = () => {
     return (
         <div className="container mx-auto p-4">
             <h1 className="text-2xl font-bold mb-4 text-center">Abacus Test</h1>
-            {!testCompleted ? (
+
+            {!testStarted ? (
+                <div className="text-center">
+                    <button
+                        onClick={handleStartTest}
+                        className="bg-blue-500 text-white px-6 py-2 rounded mt-4"
+                    >
+                        Start Test
+                    </button>
+                    {errorMessage && (
+                        <div className="text-center text-red-600 font-semibold mt-4">{errorMessage}</div>
+                    )}
+                </div>
+            ) : !testCompleted ? (
                 <div>
                     <h2 className="text-xl font-semibold text-center">
                         Level {level} - Section {section}
@@ -194,24 +258,3 @@ const TestQuestion = () => {
 };
 
 export default TestQuestion;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
