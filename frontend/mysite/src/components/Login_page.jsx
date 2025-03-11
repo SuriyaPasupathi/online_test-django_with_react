@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
     const [username, setUsername] = useState('');
@@ -6,39 +7,35 @@ const Login = () => {
     const [errorMessage, setErrorMessage] = useState('');
     const [loading, setLoading] = useState(false);
 
+    const navigate = useNavigate();
+
     const handleLogin = async (event) => {
         event.preventDefault();
         setLoading(true);
         setErrorMessage('');
 
         try {
-            // Make the POST request to the backend for login
             const response = await fetch('http://127.0.0.1:8000/api/login/', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),
             });
 
             const data = await response.json();
 
             if (response.status === 200 && data.access_token) {
-                // Store the access and refresh tokens in localStorage for future use
+                // Save tokens directly
                 localStorage.setItem('access_token', data.access_token);
                 localStorage.setItem('refresh_token', data.refresh_token);
 
-                // Redirect the user to the home page after a successful login
-                window.location.href = '/Home';
+                // Navigate to Home page
+                navigate('/Home');
             } else {
-                // Display error message if login fails
                 setErrorMessage(data.message || 'Invalid credentials.');
             }
         } catch (error) {
-            // Catch any errors and display them
             setErrorMessage('Something went wrong. Please try again.');
         } finally {
-            // Stop loading spinner
             setLoading(false);
         }
     };

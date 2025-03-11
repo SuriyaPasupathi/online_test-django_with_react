@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const Home = () => {
@@ -6,13 +6,21 @@ const Home = () => {
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showNotification, setShowNotification] = useState(false); // State for toggling notification visibility
+  const [showNotification, setShowNotification] = useState(false);
+
+  // Redirect to login if token is missing
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      navigate("/Login_page");
+    }
+  }, [navigate]);
 
   // Fetch test notifications
   const handleNotificationClick = async () => {
     setLoading(true);
     setError(null);
-    setShowNotification(!showNotification); // Toggle notification visibility
+    setShowNotification(!showNotification);
 
     try {
       const response = await fetch("http://localhost:8000/api/test_notification/");
@@ -36,36 +44,11 @@ const Home = () => {
   // Navigate to Test Session
   const handleTestSession = () => navigate("/test_session");
 
-  // Handle Logout
-  const handleLogout = async () => {
-    try {
-      const accessToken = localStorage.getItem("access_token");
-      const refreshToken = localStorage.getItem("refresh_token");
-
-      if (!accessToken || !refreshToken) {
-        navigate("/login_page");
-        return;
-      }
-
-      const response = await fetch("http://localhost:8000/api/logout/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ refresh: refreshToken }),
-      });
-
-      if (response.ok) {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        navigate("/login_page");
-      } else {
-        throw new Error("Logout failed");
-      }
-    } catch (error) {
-      navigate("/Register_page");
-    }
+  // Logout user (clear tokens and redirect)
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    navigate("/Login_page");
   };
 
   return (
@@ -92,7 +75,6 @@ const Home = () => {
           <p className="text-sm text-gray-600">
             Test Date: {notification.formatted_date} | Time: {notification.formatted_time}
           </p>
-        
         </div>
       )}
 
