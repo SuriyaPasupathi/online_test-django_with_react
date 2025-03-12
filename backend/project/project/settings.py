@@ -224,7 +224,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:5176',  # Add your frontend URL here
 ]
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'kubernetes.docker.internal']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0897-103-186-120-4.ngrok-free.app']
 
 # Ensure sensitive data is stored in .env
 DB_NAME = os.getenv('DB_NAME')
