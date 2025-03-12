@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'drf_yasg',
     'rest_framework_simplejwt',
     'corsheaders',
     'rest_framework.authtoken',
@@ -75,6 +76,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -98,8 +101,8 @@ SIMPLE_JWT = {
 # Update CORS settings for production
 CORS_ALLOW_ALL_ORIGINS = False  # Disable for production
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Your React frontend (Vite default port)
-    "http://127.0.0.1:5173",  # Sometimes localhost works as 127.0.0.1
+    "http://localhost:5176",  # Your React frontend (Vite default port)
+    "http://127.0.0.1:5176",  # Sometimes localhost works as 127.0.0.1
 ]
 
 CORS_ALLOW_METHODS = [
@@ -218,10 +221,10 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'pavimohan0105@gmail.com')
 
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173',  # Add your frontend URL here
+    'http://localhost:5176',  # Add your frontend URL here
 ]
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'kubernetes.docker.internal']
 
 # Ensure sensitive data is stored in .env
 DB_NAME = os.getenv('DB_NAME')

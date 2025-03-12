@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from .models import  AbacusTest,AttemptDetail,UserAttempt,TestNotification,TestStatus
+from .models import  AbacusTest,AttemptDetail,UserAttempt,TestNotification,TestStatus,YourModel
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -79,3 +79,10 @@ class TestStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestStatus
         fields = ['is_test_posted']
+
+
+
+class YourModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = YourModel
+        fields = '__all__'  # Or specify the fields you want to expose

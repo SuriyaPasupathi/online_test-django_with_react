@@ -11,29 +11,33 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+  
     // Validate form
     if (password !== confirmPassword) {
       alert("Passwords do not match");
       return;
     }
-
+  
+    const requestData = {
+      username,
+      email,
+      password,
+    };
+  
+    console.log("Request data being sent:", requestData); // Debugging line
+  
     try {
       // Make the POST request using axios
       const response = await axios.post(
         "http://127.0.0.1:8000/api/register/",
-        {
-          username,
-          email,
-          password,
-        },
+        requestData, // Send data as a plain object
         {
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json", // Ensure correct header
           },
         }
       );
-
+  
       if (response.status === 201) {
         alert("Registration successful, wait for admin approval");
         // Navigate to login page after successful registration
@@ -50,7 +54,7 @@ const Register = () => {
       }
     }
   };
-
+  
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="max-w-md w-full p-8 bg-white shadow-lg rounded-md">

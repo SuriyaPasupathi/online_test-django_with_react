@@ -6,7 +6,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User,AbacusTest,session,TestNotification, UserAttempt, AttemptDetail,TestStatus
+from .models import User,AbacusTest,session,TestNotification, UserAttempt, AttemptDetail,TestStatus,YourModel
 from rest_framework import status 
 from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
@@ -18,7 +18,7 @@ from django.views import View
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.decorators import login_required
-from .serializers import TestStatusSerializer
+from .serializers import TestStatusSerializer,YourModelSerializer
 from rest_framework.permissions import IsAdminUser
 import random
 from django.contrib.auth import authenticate
@@ -29,67 +29,199 @@ from django.db import IntegrityError
 from rest_framework_simplejwt.tokens import TokenError
 from django.utils.timezone import localtime
 
-logger = logging.getLogger(__name__) # Set up logger
+
+
+logger = logging.getLogger(__name__)
+
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
-    permission_classes = [AllowAny]  # Allow any user (unauthenticated)
+    permission_classes = [AllowAny]
 
-    def post(self, request):
-        """Handles user registration, sends admin approval request, and generates JWT token."""
+    def post(self, request, *args, **kwargs):
         try:
-            # Extract data from the request
-            data = request.data
-            username = data.get('username')
-            email = data.get('email')
-            password = data.get('password')
+            # Enhanced debugging
+            print('\n', '='*50)
+            print('DETAILED REQUEST INFO:')
+            print(f'Method: {request.method}')
+            print(f'Content-Type: {request.content_type}')
+            print(f'Body Type: {type(request.body)}')
+            print(f'Body Length: {len(request.body) if request.body else 0}')
+            print('Headers:')
+            for key, value in request.headers.items():
+                print(f'  {key}: {value}')
+            print('Raw Body:', request.body)
+            print('Request Data:', request.data if hasattr(request, 'data') else 'No data attribute')
+            print('='*50, '\n')
 
-            # Validate input - Ensure necessary fields are provided
-            if not username or not email or not password:
-                logger.warning("Missing required fields in registration data.")
-                return Response({'message': 'Username, email, and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+            # Try multiple methods to get the data
+            data = None
 
+            # Method 1: Try request.data (DRF parsed data)
+            if hasattr(request, 'data') and request.data:
+                print("Getting data from request.data")
+                if isinstance(request.data, dict):
+                    data = request.data
+                else:
+                    try:
+                        data = json.loads(request.data)
+                    except:
+                        pass
+
+            # Method 2: Try raw body
+            if not data and request.body:
+                print("Trying to parse raw body")
+                try:
+                    data = json.loads(request.body.decode('utf-8'))
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error: {str(e)}")
+                    return Response({
+                        'message': 'Invalid JSON format',
+                        'error': str(e),
+                        'help': 'Please ensure your request:',
+                        'requirements': {
+                            'headers': {
+                                'Content-Type': 'application/json'
+                            },
+                            'body_format': {
+                                'username': 'yourusername',
+                                'email': 'emailexample1@gmail.com',
+                                'password': 'yourpassword123'
+                            }
+                        }
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Method 3: Try POST data
+            if not data:
+                print("Trying POST data")
+                data = request.POST.dict()
+
+            # If still no data, check if it's in the query params
+            if not data:
+                print("Trying query parameters")
+                data = request.GET.dict()
+
+            # Final check for data
+            if not data:
+                print("No data found in request")
+                return Response({
+                    'message': 'Request body is empty',
+                    'help': 'Please ensure you are:',
+                    'steps': [
+                        'Using POST method',
+                        'Setting Content-Type: application/json header',
+                        'Sending data in the request body',
+                        'Using valid JSON format'
+                    ],
+                    'example_request': {
+                        'method': 'POST',
+                        'headers': {
+                            'Content-Type': 'application/json'
+                        },
+                        'body': {
+                                'username': 'yourusername',
+                                'email': 'emailexample1@gmail.com',
+                                'password': 'yourpassword123'
+                        }
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            print("Final processed data:", data)
+
+            # Extract and validate fields
+            username = str(data.get('username', '')).strip()
+            email = str(data.get('email', '')).strip()
+            password = str(data.get('password', '')).strip()
+
+            # Validate required fields
+            if not all([username, email, password]):
+                missing = []
+                if not username: missing.append('username')
+                if not email: missing.append('email')
+                if not password: missing.append('password')
+                return Response({
+                    'message': 'Missing required fields',
+                    'missing_fields': missing,
+                    'received_data': data
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate email format
             if '@' not in email:
-                logger.warning(f"Invalid email format: {email}")
-                return Response({'message': 'Invalid email format.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'message': 'Invalid email format',
+                    'received_email': email
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if username or email is already taken
+            # Check existing users
             if User.objects.filter(username=username).exists():
-                logger.warning(f"Username already taken: {username}")
-                return Response({'message': 'Username already taken.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'message': 'Username already exists',
+                    'username': username
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             if User.objects.filter(email=email).exists():
-                logger.warning(f"Email already registered: {email}")
-                return Response({'message': 'Email already registered.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'message': 'Email already registered',
+                    'email': email
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Create inactive user
-            hashed_password = make_password(password)
-            user = User(username=username, email=email, password=hashed_password, is_active=False)  
-            user.save()
-
-            # Generate JWT token for new user
-            tokens = get_tokens_for_user(user)
-
-            # Notify admin for approval
+            # Create user
             try:
-                send_mail(
-                    'New User Registration',
-                    f'A new user has registered: {username} ({email}). Please approve them.',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [settings.ADMIN_EMAIL],  # Ensure this is a valid admin email
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=password,
+                    is_active=False
                 )
-                logger.info(f"Admin notified about new user: {username} ({email})")
-            except Exception as email_error:
-                logger.error(f"Error sending email notification: {str(email_error)}")
-                return Response({'message': 'Registration successful, but failed to notify admin. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                print(f'User created successfully: {username}')
 
-            return Response({
-                'message': 'Registration successful. Please wait for admin approval.',
-                'access_token': tokens['access'],  # Send JWT access token as part of response
-                'refresh_token': tokens['refresh']  # Send JWT refresh token as part of response
-            }, status=status.HTTP_201_CREATED)
+                # Generate tokens
+                refresh = RefreshToken.for_user(user)
+                tokens = {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                }
+
+                # Try to send email
+                try:
+                    send_mail(
+                        'New User Registration',
+                        f'New user registered: {username} ({email})',
+                        settings.DEFAULT_FROM_EMAIL,
+                        [settings.ADMIN_EMAIL],
+                        fail_silently=True
+                    )
+                except Exception as e:
+                    print(f"Email notification failed: {e}")
+
+                return Response({
+                    'message': 'Registration successful',
+                    'user': {
+                        'username': username,
+                        'email': email
+                    },
+                    'tokens': tokens
+                }, status=status.HTTP_201_CREATED)
+
+            except Exception as e:
+                print(f"User creation error: {e}")
+                return Response({
+                    'message': 'Failed to create user',
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except Exception as e:
-            logger.error(f"Error during registration: {str(e)}")
-            return Response({'message': 'Something went wrong. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Unexpected error: {str(e)}")
+            return Response({
+                'message': 'Registration failed',
+                'error': str(e),
+                'help': 'Please ensure your request matches the example format',
+                'example': {
+                     'username': 'yourusername',
+                     'email': 'emailexample1@gmail.com',
+                     'password': 'yourpassword123'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -438,3 +570,10 @@ def check_test_status(request):
         return Response(serializer.data)
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+    
+
+class YourModelView(APIView):
+    def get(self, request):
+        queryset = YourModel.objects.all()
+        serializer = YourModelSerializer(queryset, many=True)
+        return Response(serializer.data)

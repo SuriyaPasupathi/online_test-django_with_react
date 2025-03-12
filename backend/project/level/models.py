@@ -121,3 +121,10 @@ class TestStatus(models.Model):
 
     def __str__(self):
         return "Test is posted" if self.is_test_posted else "Test is not posted"
+
+
+class YourModel(models.Model):
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name

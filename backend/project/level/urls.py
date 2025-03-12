@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView, LoginView, approve_user,GetQuestionsView,SubmitAnswersView,Validate_answer,Get_random_questions,get_test_notification,practice_session,test_session,LogoutView,check_test_status
+from .views import RegisterView, LoginView, approve_user,GetQuestionsView,SubmitAnswersView,Validate_answer,Get_random_questions,get_test_notification,practice_session,test_session,LogoutView,check_test_status,YourModelView
 
 urlpatterns = [
     path('api/register/', RegisterView.as_view(), name='register'),
@@ -20,7 +20,8 @@ urlpatterns = [
 #  test_status
     path('api/test_status/', check_test_status, name='update_test_status'),
    
-    
+   path('api/yourmodel/', YourModelView.as_view(), name='yourmodel-list'),
+
     
 ]
 
