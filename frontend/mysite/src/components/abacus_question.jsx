@@ -1,103 +1,188 @@
-import React, { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const Home = () => {
-  const navigate = useNavigate();
+const PracticePage = () => {
+    const [questions, setQuestions] = useState([]);
+    const [answers, setAnswers] = useState({});
+    const [incorrectAnswers, setIncorrectAnswers] = useState({ 1: {}, 2: {} });
+    const [correctAnswers, setCorrectAnswers] = useState({ 1: {}, 2: {} });
+    const [level, setLevel] = useState(null);
+    const [section, setSection] = useState(1);
+    const [testCompleted, setTestCompleted] = useState(false);
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const [totalQuestions, setTotalQuestions] = useState(0);
+    const [totalIncorrect, setTotalIncorrect] = useState(0);
 
-  // Check for authentication on component mount
-  useEffect(() => {
-    const accessToken = localStorage.getItem("access_token");
-    if (!accessToken) {
-      navigate("/Login_page");
-    }
-  }, [navigate]);
+    useEffect(() => {
+        if (level !== null) {
+            fetchQuestions();
+        }
+    }, [level, section]);
 
-  // Function to handle Practice Session navigation
-  const handlePracticeSession = () => {
-    navigate("/abacus_question");
-  };
+    useEffect(() => {
+        if (testCompleted) {
+            // Call the practice session API automatically after completing the test
+            axios
+                .post("http://localhost:8000/api/practice_session/", {
+                    score: totalQuestions - totalIncorrect,
+                    total_questions: totalQuestions,
+                }, {
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem("access_token")}` // Add auth token if needed
+                    }
+                })
+                .then((response) => {
+                    console.log("Practice session recorded:", response.data);
+                })
+                .catch((error) => {
+                    console.error("Error submitting practice session:", error);
+                });
+        }
+    }, [testCompleted]); // Runs when test is completed
 
-  // Function to handle Test Session navigation
-  const handleTestSession = () => {
-    navigate("/test_session");
-  };
+    const fetchQuestions = () => {
+        axios.get(`http://localhost:8000/api/questions/${level}/${section}/`)
+            .then((response) => {
+                setQuestions(response.data.questions);
+                setAnswers({});
+                setIncorrectAnswers((prev) => ({ ...prev, [section]: {} }));
+                setCorrectAnswers((prev) => ({ ...prev, [section]: {} }));
+                setCurrentQuestionIndex(0);
+                setTotalQuestions((prev) => prev + response.data.questions.length);
+            })
+            .catch((error) => console.error("Error fetching questions:", error));
+    };
 
-  const handleLogout = async () => {
-    const refreshToken = localStorage.getItem("refresh_token");
-    const accessToken = localStorage.getItem("access_token");
-  
-    // Clear tokens first to prevent any issues if the API call fails
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    
-    // Only attempt API call if we have tokens
-    if (refreshToken && accessToken) {
-      try {
-        await axios.post(
-          "http://127.0.0.1:8000/api/logout/",
-          { refresh_token: refreshToken },
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        console.log("Logout API call successful");
-      } catch (error) {
-        console.error("Logout API call failed:", error);
-        // We've already cleared tokens, so no need to handle further
-      }
-    }
-    
-    alert("You have been logged out successfully.");
-    navigate("/Login_page");
-  };
+    const handleAnswerChange = (questionId, value) => {
+        setAnswers((prev) => ({
+            ...prev,
+            [questionId]: value,
+        }));
+    };
 
-  return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-      <h1 className="absolute top-6 text-xl sm:text-xl md:text-xl lg:text-4xl font-bold text-gray-900 text-center mb-6">
-        Online Abacus Test
-      </h1>
+    const handleSubmit = () => {
+        axios.post(`http://localhost:8000/api/submit_answers/${level}/${section}/`, { answers })
+            .then((response) => {
+                const { incorrect_answers, correct_answers } = response.data;
+                setIncorrectAnswers((prev) => ({ ...prev, [section]: incorrect_answers }));
+                setCorrectAnswers((prev) => ({ ...prev, [section]: correct_answers }));
 
-      {/* Notification Button */}
-      <button className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-red-600">
-        🔔 Notifications
-      </button>
+                const incorrectCount = Object.keys(incorrect_answers).length;
+                setTotalIncorrect(prev => prev + incorrectCount);
 
-      {/* Logout Button */}
-      <button
-        onClick={handleLogout}
-        className="absolute top-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-md hover:bg-gray-900"
-      >
-        Logout
-      </button>
+                if (section === 2) {
+                    const finalScore = totalQuestions - (totalIncorrect + incorrectCount);
+                    setTestCompleted(true);
+                    alert(`Your final score is: ${finalScore}/${totalQuestions}`);
+                } else {
+                    setSection(2);
+                }
+            })
+            .catch((error) => console.error("Error submitting answers:", error));
+    };
 
-      {/* Image Section */}
-      <div className="relative w-full max-w-3xl px-2">
-        <img
-          src="https://media.istockphoto.com/id/968852086/photo/happy-teacher-and-kids-learning-to-count-on-abacus-at-preschool.jpg?s=612x612&w=0&k=20&c=KGJytQqvptIHtEFePsQhIqckbCoXyuDBHNLHINpOe5A="
-          alt="Abacus Learning"
-          className="rounded-lg shadow-lg w-full h-auto"
-        />
-        <p className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-black text-lg sm:text-xl md:text-2xl font-['Roboto'] italic px-4 py-2 whitespace-nowrap">
-          You can learn something new every day
-        </p>
-      </div>
+    const handleLevelChange = (selectedLevel) => {
+        setLevel(selectedLevel);
+        setSection(1);
+        setTestCompleted(false);
+        setIncorrectAnswers({ 1: {}, 2: {} });
+        setCorrectAnswers({ 1: {}, 2: {} });
+        setTotalIncorrect(0);
+        setTotalQuestions(0);
+    };
 
-      {/* Bottom Right Buttons */}
-      <div className="absolute bottom-4 right-4 flex flex-col sm:flex-row gap-4">
-        <button
-          onClick={handlePracticeSession}
-          className="bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600"
-        >
-          Practice Session
-        </button>
-        <button
-          onClick={handleTestSession}
-          className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-green-600"
-        >
-          Test Session
-        </button>
-      </div>
-    </div>
-  );
+    const handleBack = () => {
+        setLevel(null);
+        setTestCompleted(false);
+        setSection(1);
+    };
+
+    return (
+        <div className="container mx-auto p-4">
+            <h1 className="text-2xl font-bold mb-4 text-center">Abacus Test</h1>
+            {level === null ? (
+                <div className="mb-4 text-center">
+                    {[1, 2, 3].map((lvl) => (
+                        <button key={lvl} onClick={() => handleLevelChange(lvl)} className="bg-blue-500 text-white px-4 py-2 rounded mr-2">
+                            Level {lvl}
+                        </button>
+                    ))}
+                </div>
+            ) : !testCompleted ? (
+                <div>
+                    <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
+                    {questions.length > 0 && (
+                        <div className="p-4 border rounded shadow">
+                            <p className="text-lg font-semibold">{questions[currentQuestionIndex]?.question_text}</p>
+                            <input
+                                type="text"
+                                onChange={(e) => handleAnswerChange(questions[currentQuestionIndex]?.id, e.target.value)}
+                                value={answers[questions[currentQuestionIndex]?.id] || ""}
+                                className="border p-2 w-full mt-2 rounded"
+                                placeholder="Enter your answer"
+                            />
+                        </div>
+                    )}
+                    
+                    {/* Pagination Buttons */}
+                    <div className="mt-4 flex justify-center space-x-2">
+                        {questions.map((_, index) => (
+                            <button
+                                key={index}
+                                onClick={() => setCurrentQuestionIndex(index)}
+                                className={`px-3 py-1 rounded ${
+                                    currentQuestionIndex === index ? "bg-blue-700 text-white" : "bg-gray-300 text-black"
+                                }`}
+                            >
+                                {index + 1}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Show Submit Button ONLY on the Last Question */}
+                    {currentQuestionIndex === questions.length - 1 && (
+                        <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded mt-4">
+                            Submit Section {section}
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className="p-6 border rounded shadow bg-gray-100 text-center">
+                    <h2 className="text-xl font-bold">Level {level} Completed</h2>
+                    <p className="text-lg text-green-600">
+                        Final Score: {totalQuestions - totalIncorrect}/{totalQuestions}
+                    </p>
+                    {[1, 2].map((sec) => (
+                        <div key={sec} className="mt-4">
+                            <h2 className="text-xl font-semibold">Section {sec}</h2>
+                            {Object.keys(incorrectAnswers[sec] || {}).length > 0 ? (
+                                Object.entries(incorrectAnswers[sec]).map(([questionId, userAnswer]) => (
+                                    <div key={questionId} className="p-4 border rounded shadow">
+                                        <p className="text-red-500">❌ Your Answer: {userAnswer}</p>
+                                        <p className="text-green-500">✔ Correct Answer: {correctAnswers[sec]?.[questionId]}</p>
+                                    </div>
+                                ))
+                            ) : <p className="text-gray-600">All answers correct!</p>}
+                        </div>
+                    ))}
+                    <button onClick={handleBack} className="mt-4 bg-gray-500 text-white px-4 py-2 rounded">Back</button>
+                </div>
+            )}
+        </div>
+    );
 };
 
-export default Home;
+export default PracticePage;
+
+
+
+
+
+
+
+
+
+
+
+
+
