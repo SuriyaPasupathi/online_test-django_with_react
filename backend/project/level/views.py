@@ -22,7 +22,7 @@ from .serializers import TestStatusSerializer,YourModelSerializer
 from rest_framework.permissions import IsAdminUser
 import random
 from django.contrib.auth import authenticate
-from django.utils import timezone
+from django.http import HttpResponse
 from .utils import get_tokens_for_user
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import IntegrityError
@@ -277,11 +277,20 @@ def approve_user(request):
         return Response({'message': 'Something went wrong. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class GetQuestionsView(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
-        # Fetch the questions based on level and section
-        questions = AbacusTest.objects.filter(level=level_id, section=section_id)
+        # Fetch all questions for given level and section
+        questions = list(AbacusTest.objects.filter(level=level_id, section=section_id))
 
-        # Prepare data to return
-        questions_data = [{"id": question.id, "question_text": question.question_text} for question in questions]
+        # Shuffle the questions randomly
+        random.shuffle(questions)
+
+        # Optional: Limit number of questions (e.g., 10 random questions)
+        selected_questions = questions[:10]
+
+        # Prepare response data
+        questions_data = [
+            {"id": question.id, "question_text": question.question_text}
+            for question in selected_questions
+        ]
 
         return JsonResponse({"questions": questions_data}, status=200)
 @method_decorator(csrf_exempt, name='dispatch')
@@ -339,16 +348,25 @@ class SubmitAnswersView(View):
             return JsonResponse({"error": str(e)}, status=500)
 class Get_random_questions(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
-        # Fetch questions based on level and section
-        questions = session.objects.filter(level=level_id, section=section_id)
+        # Fetch all questions for that level and section
+        all_questions = list(session.objects.filter(level=level_id, section=section_id))
 
-        # Get time_limit from the first question, otherwise default to 600 seconds
-        time_limit = questions.first().time_limit if questions.exists() else 600  
+        # Shuffle the list randomly
+        random.shuffle(all_questions)
 
-        # Prepare data to return
+        # Select first N questions after shuffling (optional limit, e.g., 10)
+        selected_questions = all_questions[:10]
+
+        # Get time_limit from the first selected question
+        time_limit = selected_questions[0].time_limit if selected_questions else 600
+
+        # Prepare response data
         questions_data = [
-            {"id": question.id, "question_text": question.question_text, "correct_answer": question.correct_answer} 
-            for question in questions
+            {
+                "id": q.id,
+                "question_text": q.question_text,
+                "correct_answer": q.correct_answer
+            } for q in selected_questions
         ]
 
         return JsonResponse({"questions": questions_data, "time_limit": time_limit}, status=200)
@@ -577,3 +595,7 @@ class YourModelView(APIView):
         queryset = YourModel.objects.all()
         serializer = YourModelSerializer(queryset, many=True)
         return Response(serializer.data)
+    
+
+def home(request):
+    return HttpResponse("Welcome to Abacus Online Test Portal")

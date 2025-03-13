@@ -101,8 +101,8 @@ SIMPLE_JWT = {
 # Update CORS settings for production
 CORS_ALLOW_ALL_ORIGINS = False  # Disable for production
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5176",  # Your React frontend (Vite default port)
-    "http://127.0.0.1:5176",  # Sometimes localhost works as 127.0.0.1
+    "http://localhost:5173",  # Your React frontend (Vite default port)
+    "http://127.0.0.1:5173",  # Sometimes localhost works as 127.0.0.1
 ]
 
 CORS_ALLOW_METHODS = [
@@ -221,10 +221,10 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'pavimohan0105@gmail.com')
 
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5176',  # Add your frontend URL here
+    'http://localhost:5173',  # Add your frontend URL here
 ]
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0897-103-186-120-4.ngrok-free.app']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']
 
 # Ensure sensitive data is stored in .env
 DB_NAME = os.getenv('DB_NAME')
