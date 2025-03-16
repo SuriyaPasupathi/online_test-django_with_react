@@ -8,7 +8,6 @@ const Home = () => {
   const [error, setError] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
 
-  // Redirect to login if token is missing
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) {
@@ -16,7 +15,6 @@ const Home = () => {
     }
   }, [navigate]);
 
-  // Fetch test notifications
   const handleNotificationClick = async () => {
     setLoading(true);
     setError(null);
@@ -38,13 +36,8 @@ const Home = () => {
     }
   };
 
-  // Navigate to Practice Session
   const handlePracticeSession = () => navigate("/abacus_question");
-
-  // Navigate to Test Session
   const handleTestSession = () => navigate("/test_session");
-
-  // Logout user (clear tokens and redirect)
   const handleLogout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
@@ -52,63 +45,57 @@ const Home = () => {
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-      {/* Page Title */}
-      <h1 className="absolute top-6 text-xl sm:text-xl md:text-xl lg:text-4xl font-bold text-gray-900 text-center mb-6">
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 text-center">
+      <h1 className="absolute top-4 sm:top-6 text-xl sm:text-2xl md:text-4xl font-bold text-gray-900 px-2">
         Online Abacus Test
       </h1>
 
-      {/* Notification Button */}
       <button
         onClick={handleNotificationClick}
-        className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-red-600 transition"
+        className="absolute top-16 sm:top-4 left-4 bg-red-500 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg shadow-md hover:bg-red-600 transition text-sm sm:text-base"
       >
         🔔 Notifications
       </button>
 
-      {/* Display Notification */}
       {loading && <p className="text-gray-700 mt-4">Loading notification...</p>}
       {error && <p className="text-red-500 mt-4">{error}</p>}
       {showNotification && notification && (
-        <div className="absolute top-16 left-4 bg-white p-4 rounded-lg shadow-md text-center">
-          <p className="text-lg font-semibold">{notification.message}</p>
-          <p className="text-sm text-gray-600">
+        <div className="absolute top-24 sm:top-16 left-2 sm:left-4 bg-white p-3 sm:p-4 rounded-lg shadow-md max-w-[90vw] sm:max-w-md">
+          <p className="text-base sm:text-lg font-semibold">{notification.message}</p>
+          <p className="text-xs sm:text-sm text-gray-600">
             Test Date: {notification.formatted_date} | Time: {notification.formatted_time}
           </p>
         </div>
       )}
 
-      {/* Logout Button */}
       <button
         onClick={handleLogout}
-        className="absolute top-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-md hover:bg-gray-900 transition"
+        className="absolute top-16 sm:top-4 right-4 bg-gray-800 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg shadow-md hover:bg-gray-900 transition text-sm sm:text-base"
       >
         Logout
       </button>
 
-      {/* Image Section */}
-      <div className="relative w-full max-w-3xl px-2 mt-8">
+      <div className="relative w-full max-w-3xl px-2 mt-28 sm:mt-20">
         <img
           src="https://media.istockphoto.com/id/968852086/photo/happy-teacher-and-kids-learning-to-count-on-abacus-at-preschool.jpg?s=612x612&w=0&k=20&c=KGJytQqvptIHtEFePsQhIqckbCoXyuDBHNLHINpOe5A="
           alt="Abacus Learning"
-          className="rounded-lg shadow-lg w-full h-auto"
+          className="rounded-lg shadow-lg w-full h-auto object-cover aspect-video"
         />
-        <p className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-black text-lg sm:text-xl md:text-2xl font-['Roboto'] italic px-4 py-2 whitespace-nowrap">
+        <p className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-black text-base sm:text-lg md:text-2xl font-['Roboto'] italic px-2 sm:px-4 py-1 sm:py-2 bg-white/75 rounded-lg w-[90%] sm:w-auto">
           You can learn something new every day
         </p>
       </div>
 
-      {/* Bottom Right Buttons */}
-      <div className="absolute bottom-4 right-4 flex flex-col sm:flex-row gap-4">
+      <div className="fixed bottom-4 right-0 left-0 sm:left-auto sm:right-4 flex flex-row justify-center sm:flex-row gap-2 sm:gap-4 px-4">
         <button
           onClick={handlePracticeSession}
-          className="bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition"
+          className="flex-1 sm:flex-initial bg-blue-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-md hover:bg-blue-600 transition text-sm sm:text-base"
         >
           Practice Session
         </button>
         <button
           onClick={handleTestSession}
-          className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-green-600 transition"
+          className="flex-1 sm:flex-initial bg-green-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-md hover:bg-green-600 transition text-sm sm:text-base"
         >
           Test Session
         </button>

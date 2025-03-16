@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
+from django.http import HttpResponse
 from django.views import View
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -22,7 +23,7 @@ from .serializers import TestStatusSerializer,YourModelSerializer
 from rest_framework.permissions import IsAdminUser
 import random
 from django.contrib.auth import authenticate
-from django.http import HttpResponse
+from django.utils import timezone
 from .utils import get_tokens_for_user
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import IntegrityError
@@ -39,100 +40,60 @@ class RegisterView(APIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            # Enhanced debugging
+            # Detailed request debugging
             print('\n', '='*50)
-            print('DETAILED REQUEST INFO:')
+            print('DEBUG INFO:')
             print(f'Method: {request.method}')
-            print(f'Content-Type: {request.content_type}')
+            print(f'Headers: {dict(request.headers)}')
             print(f'Body Type: {type(request.body)}')
-            print(f'Body Length: {len(request.body) if request.body else 0}')
-            print('Headers:')
-            for key, value in request.headers.items():
-                print(f'  {key}: {value}')
+            print(f'Body Length: {len(request.body)}')
+            print(f'Content-Type: {request.content_type}')
             print('Raw Body:', request.body)
-            print('Request Data:', request.data if hasattr(request, 'data') else 'No data attribute')
             print('='*50, '\n')
 
-            # Try multiple methods to get the data
-            data = None
-
-            # Method 1: Try request.data (DRF parsed data)
-            if hasattr(request, 'data') and request.data:
-                print("Getting data from request.data")
-                if isinstance(request.data, dict):
-                    data = request.data
-                else:
-                    try:
-                        data = json.loads(request.data)
-                    except:
-                        pass
-
-            # Method 2: Try raw body
-            if not data and request.body:
-                print("Trying to parse raw body")
-                try:
-                    data = json.loads(request.body.decode('utf-8'))
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {str(e)}")
-                    return Response({
-                        'message': 'Invalid JSON format',
-                        'error': str(e),
-                        'help': 'Please ensure your request:',
-                        'requirements': {
-                            'headers': {
-                                'Content-Type': 'application/json'
-                            },
-                            'body_format': {
-                                'username': 'yourusername',
-                                'email': 'emailexample1@gmail.com',
-                                'password': 'yourpassword123'
-                            }
-                        }
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
-            # Method 3: Try POST data
-            if not data:
-                print("Trying POST data")
-                data = request.POST.dict()
-
-            # If still no data, check if it's in the query params
-            if not data:
-                print("Trying query parameters")
-                data = request.GET.dict()
-
-            # Final check for data
-            if not data:
-                print("No data found in request")
+            # Try to parse the raw body directly
+            if not request.body:
                 return Response({
                     'message': 'Request body is empty',
-                    'help': 'Please ensure you are:',
-                    'steps': [
-                        'Using POST method',
-                        'Setting Content-Type: application/json header',
-                        'Sending data in the request body',
-                        'Using valid JSON format'
-                    ],
-                    'example_request': {
-                        'method': 'POST',
-                        'headers': {
-                            'Content-Type': 'application/json'
-                        },
-                        'body': {
-                                'username': 'yourusername',
-                                'email': 'emailexample1@gmail.com',
-                                'password': 'yourpassword123'
-                        }
+                    'help': 'Please send a POST request with JSON data',
+                    'example': {
+                        'username': 'aarthiaswin',
+                        'email': 'aswinarthi1@gmail.com',
+                        'password': 'aarthiadvik123'
                     }
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            print("Final processed data:", data)
+            try:
+                # Convert bytes to string and parse JSON
+                body_str = request.body.decode('utf-8')
+                data = json.loads(body_str)
+                print('Parsed Data:', data)
+                
+                # Validate data is dictionary
+                if not isinstance(data, dict):
+                    return Response({
+                        'message': 'Invalid data format. Expected JSON object',
+                        'received_type': str(type(data))
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Extract and validate fields
-            username = str(data.get('username', '')).strip()
-            email = str(data.get('email', '')).strip()
-            password = str(data.get('password', '')).strip()
+            except json.JSONDecodeError as e:
+                return Response({
+                    'message': 'Invalid JSON format',
+                    'error': str(e),
+                    'received_data': body_str if 'body_str' in locals() else None
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Validate required fields
+            # Extract and validate required fields
+            username = data.get('username', '').strip()
+            email = data.get('email', '').strip()
+            password = data.get('password', '').strip()
+
+            print('Extracted fields:')
+            print(f'Username: {username}')
+            print(f'Email: {email}')
+            print(f'Password length: {len(password)}')
+
+            # Check required fields
             if not all([username, email, password]):
                 missing = []
                 if not username: missing.append('username')
@@ -210,16 +171,10 @@ class RegisterView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except Exception as e:
-            print(f"Unexpected error: {str(e)}")
+            print(f"Registration error: {e}")
             return Response({
                 'message': 'Registration failed',
-                'error': str(e),
-                'help': 'Please ensure your request matches the example format',
-                'example': {
-                     'username': 'yourusername',
-                     'email': 'emailexample1@gmail.com',
-                     'password': 'yourpassword123'
-                }
+                'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class LoginView(APIView):
@@ -277,22 +232,15 @@ def approve_user(request):
         return Response({'message': 'Something went wrong. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class GetQuestionsView(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
-        # Fetch all questions for given level and section
-        questions = list(AbacusTest.objects.filter(level=level_id, section=section_id))
-
-        # Shuffle the questions randomly
+        # Fetch the questions based on level and section
+        questions = AbacusTest.objects.filter(level=level_id, section=section_id)
         random.shuffle(questions)
 
-        # Optional: Limit number of questions (e.g., 10 random questions)
-        selected_questions = questions[:10]
-
-        # Prepare response data
-        questions_data = [
-            {"id": question.id, "question_text": question.question_text}
-            for question in selected_questions
-        ]
+        # Prepare data to return
+        questions_data = [{"id": question.id, "question_text": question.question_text} for question in questions]
 
         return JsonResponse({"questions": questions_data}, status=200)
+
 @method_decorator(csrf_exempt, name='dispatch')
 class SubmitAnswersView(View):
     def post(self, request, level_id, section_id, *args, **kwargs):
@@ -348,28 +296,30 @@ class SubmitAnswersView(View):
             return JsonResponse({"error": str(e)}, status=500)
 class Get_random_questions(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
-        # Fetch all questions for that level and section
-        all_questions = list(session.objects.filter(level=level_id, section=section_id))
+        # Filter questions based on level and section
+        questions = list(session.objects.filter(level=level_id, section=section_id))
 
-        # Shuffle the list randomly
-        random.shuffle(all_questions)
+        # Shuffle questions
+        random.shuffle(questions)
 
-        # Select first N questions after shuffling (optional limit, e.g., 10)
-        selected_questions = all_questions[:10]
+        # Pick first 10 questions (or less if total < 10)
+        selected_questions = questions[:10]
 
-        # Get time_limit from the first selected question
+        # Get time_limit from first question or default to 600 seconds
         time_limit = selected_questions[0].time_limit if selected_questions else 600
 
         # Prepare response data
         questions_data = [
             {
-                "id": q.id,
-                "question_text": q.question_text,
-                "correct_answer": q.correct_answer
-            } for q in selected_questions
+                "id": question.id,
+                "question_text": question.question_text,
+                "correct_answer": question.correct_answer
+            }
+            for question in selected_questions
         ]
 
         return JsonResponse({"questions": questions_data, "time_limit": time_limit}, status=200)
+
 @method_decorator(csrf_exempt, name='dispatch')
 class Validate_answer(View):
     def post(self, request, level_id, section_id, *args, **kwargs):
@@ -596,6 +546,5 @@ class YourModelView(APIView):
         serializer = YourModelSerializer(queryset, many=True)
         return Response(serializer.data)
     
-
 def home(request):
     return HttpResponse("Welcome to Abacus Online Test Portal")
