@@ -233,7 +233,7 @@ def approve_user(request):
 class GetQuestionsView(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
         # Fetch the questions based on level and section
-        questions = AbacusTest.objects.filter(level=level_id, section=section_id)
+        questions = list(AbacusTest.objects.filter(level=level_id, section=section_id))
         random.shuffle(questions)
 
         # Prepare data to return
