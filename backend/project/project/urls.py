@@ -22,7 +22,4 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('level.urls')),  # This handles the root URL
-]
-
-# Serve favicon in development
-urlpatterns += static('/favicon.ico', document_root=settings.BASE_DIR / 'static')
+]+ static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

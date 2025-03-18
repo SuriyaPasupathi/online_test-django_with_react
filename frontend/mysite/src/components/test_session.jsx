@@ -17,12 +17,14 @@ const TestQuestion = () => {
     const [testStarted, setTestStarted] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
 
+    // Fetch new questions when test starts or level/section changes
     useEffect(() => {
         if (testStarted) {
             fetchQuestions();
         }
     }, [testStarted, level, section]);
 
+    // Submit final score if test is completed
     useEffect(() => {
         if (testCompleted) {
             axios.post("http://localhost:8000/api/test_session/", {
@@ -34,17 +36,33 @@ const TestQuestion = () => {
                 }
             })
             .then((response) => {
-                console.log("Practice session recorded:", response.data);
+                console.log("Test session recorded:", response.data);
             })
             .catch((error) => {
-                console.error("Error submitting practice session:", error);
+                console.error("Error submitting test session:", error);
             });
         }
     }, [testCompleted]);
 
+    // Timer countdown
+    useEffect(() => {
+        if (testTimer !== null && testTimer > 0) {
+            const timerInterval = setInterval(() => {
+                setTestTimer((prev) => {
+                    if (prev <= 1) {
+                        clearInterval(timerInterval);
+                        handleSubmit(); // Auto-submit when time ends
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timerInterval);
+        }
+    }, [testTimer]);
+
+    // Start test only if test is posted by admin
     const handleStartTest = () => {
         const token = localStorage.getItem("access_token");
-
         if (!token) {
             setErrorMessage("Please log in to start the test.");
             return;
@@ -59,7 +77,6 @@ const TestQuestion = () => {
             if (response.data.is_test_posted) {
                 setTestStarted(true);
                 setErrorMessage("");
-                fetchQuestions();
             } else {
                 setErrorMessage("Test cannot be started. It has not been posted by the admin yet.");
             }
@@ -70,21 +87,7 @@ const TestQuestion = () => {
         });
     };
 
-    useEffect(() => {
-        if (testTimer !== null && testTimer > 0) {
-            const timerInterval = setInterval(() => {
-                setTestTimer((prev) => {
-                    if (prev <= 1) {
-                        clearInterval(timerInterval);
-                        handleSubmit();
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-            return () => clearInterval(timerInterval);
-        }
-    }, [testTimer]);
-
+    // Fetch questions for current level and section
     const fetchQuestions = () => {
         axios.get(`http://localhost:8000/api/random_questions/${level}/${section}/`)
         .then((response) => {
@@ -113,6 +116,7 @@ const TestQuestion = () => {
         });
     };
 
+    // Handle user input
     const handleAnswerChange = (questionId, value) => {
         setAnswers((prev) => ({
             ...prev,
@@ -120,6 +124,7 @@ const TestQuestion = () => {
         }));
     };
 
+    // Submit answers and auto-transition to next section or level
     const handleSubmit = () => {
         axios.post(`http://localhost:8000/api/validate_answers/${level}/${section}/`, { answers })
         .then((response) => {
@@ -136,23 +141,25 @@ const TestQuestion = () => {
                 setTestCompleted(true);
                 alert(`Your final score is: ${finalScore}/${totalQuestions}`);
             } else {
-                if (section === 2) {
-                    setLevel(level + 1);
+                if (section === 1) {
+                    setSection(2); // Auto-move to Section 2
+                } else if (section === 2) {
+                    setLevel((prev) => prev + 1); // Move to next level
                     setSection(1);
-                } else {
-                    setSection(2);
                 }
             }
         })
         .catch((error) => console.error("Error submitting answers:", error));
     };
 
+    // Reset everything
     const handleBack = () => {
         setTestCompleted(false);
         setLevel(1);
         setSection(1);
         setTotalQuestions(0);
         setTotalIncorrect(0);
+        setTestStarted(false);
     };
 
     return (
@@ -177,7 +184,7 @@ const TestQuestion = () => {
                         Level {level} - Section {section}
                     </h2>
                     {testTimer !== null && (
-                        <div className="text-center text-red-600 font-bold">
+                        <div className="text-center text-red-600 font-bold mt-2">
                             Time Left: {Math.floor(testTimer / 60)}:{testTimer % 60 < 10 ? "0" : ""}{testTimer % 60} min
                         </div>
                     )}
