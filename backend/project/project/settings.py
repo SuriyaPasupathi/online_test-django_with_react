@@ -225,8 +225,13 @@ ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'pavimohan0105@gmail.com')
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:5173',  # Add your frontend URL here
 ]
+CSRF_TRUSTED_ORIGINS = [
+    "https://8e87-2409-4072-595-4d79-2073-4155-634-59fd.ngrok-free.app",
+]
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['*']
+
 
 # Ensure sensitive data is stored in .env
 DB_NAME = os.getenv('DB_NAME')

@@ -29,7 +29,7 @@ const Register = () => {
     try {
       // Make the POST request using axios
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/register/",
+        " http://127.0.0.1:8000/api/register/",
         requestData, // Send data as a plain object
         {
           headers: {

@@ -30,13 +30,20 @@ from django.db import IntegrityError
 from rest_framework_simplejwt.tokens import TokenError
 from django.utils.timezone import localtime
 
-
-
-logger = logging.getLogger(__name__)
-
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    def get(self, request, *args, **kwargs):
+        return Response({
+        'message': 'Register API is working.',
+        'method': 'GET',
+        'usage': 'Send a POST request with username, email, and password to register.',
+        'example': {
+            'username': 'exampleuser',
+            'email': 'example@example.com',
+            'password': 'yourpassword123'
+        }
+    }, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
         try:
@@ -57,9 +64,9 @@ class RegisterView(APIView):
                     'message': 'Request body is empty',
                     'help': 'Please send a POST request with JSON data',
                     'example': {
-                        'username': 'aarthiaswin',
-                        'email': 'aswinarthi1@gmail.com',
-                        'password': 'aarthiadvik123'
+                        'username': 'exampleuser',
+                        'email': 'example@example.com',
+                        'password': 'yourpassword123'
                     }
                 }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -68,7 +75,7 @@ class RegisterView(APIView):
                 body_str = request.body.decode('utf-8')
                 data = json.loads(body_str)
                 print('Parsed Data:', data)
-                
+
                 # Validate data is dictionary
                 if not isinstance(data, dict):
                     return Response({
@@ -177,8 +184,20 @@ class RegisterView(APIView):
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({
+            "message": "Login API is working.",
+            "method": "GET",
+            "usage": "Send a POST request with username and password to log in.",
+            "example": {
+                "username": "exampleuser",
+                "password": "yourpassword123"
+            }
+        }, status=status.HTTP_200_OK)
 
     def post(self, request):
         username = request.data.get("username")
