@@ -1,10 +1,10 @@
 from django.urls import path
-from .views import RegisterView, LoginView, approve_user,GetQuestionsView,SubmitAnswersView,Validate_answer,Get_random_questions,get_test_notification,practice_session,test_session,LogoutView,check_test_status,YourModelView,home
+from .views import RegisterView, LoginView,GetQuestionsView,SubmitAnswersView,Validate_answer,Get_random_questions,get_test_notification,practice_session,test_session,LogoutView,check_test_status,YourModelView,home
 
 urlpatterns = [
     path('api/register/', RegisterView.as_view(), name='register'),
     path('api/login/', LoginView.as_view(), name='login'),
-    path('approve-user/', approve_user, name='approve_user'),
+   
 #   practice_session
     path('api/questions/<int:level_id>/<int:section_id>/', GetQuestionsView.as_view(), name='get_questions'),
     path('api/submit_answers/<int:level_id>/<int:section_id>/', SubmitAnswersView.as_view(), name='submit_answers'),

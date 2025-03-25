@@ -23,7 +23,7 @@ const PracticePage = () => {
         if (testCompleted) {
             // Call the practice session API automatically after completing the test
             axios
-                .post(" https://74d1-103-186-120-4.ngrok-free.app/api/practice_session/", {
+                .post(" http://127.0.0.1:8000/api/practice_session/", {
                     score: totalQuestions - totalIncorrect,
                     total_questions: totalQuestions,
                 }, {
@@ -41,7 +41,7 @@ const PracticePage = () => {
     }, [testCompleted]); // Runs when test is completed
 
     const fetchQuestions = () => {
-        axios.get(` https://74d1-103-186-120-4.ngrok-free.app/api/questions/${level}/${section}/`)
+        axios.get(` http://127.0.0.1:8000/api/questions/${level}/${section}/`)
             .then((response) => {
                 setQuestions(response.data.questions);
                 setAnswers({});
@@ -61,7 +61,7 @@ const PracticePage = () => {
     };
 
     const handleSubmit = () => {
-        axios.post(` https://74d1-103-186-120-4.ngrok-free.app/api/submit_answers/${level}/${section}/`, { answers })
+        axios.post(` http://127.0.0.1:8000/api/submit_answers/${level}/${section}/`, { answers })
             .then((response) => {
                 const { incorrect_answers, correct_answers } = response.data;
                 setIncorrectAnswers((prev) => ({ ...prev, [section]: incorrect_answers }));
