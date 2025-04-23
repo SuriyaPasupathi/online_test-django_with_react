@@ -1,5 +1,4 @@
 import logging
-from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
@@ -7,7 +6,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User,AbacusTest,PracticeSession,session,TestNotification
+from .models import User,AbacusTest,session,TestNotification, UserAttempt, AttemptDetail,TestStatus,YourModel
 from rest_framework import status 
 from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
@@ -15,303 +14,358 @@ from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
+from django.http import HttpResponse
 from django.views import View
-from django.views.decorators.cache import never_cache
+from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from .serializers import TestSerializer
+from django.contrib.auth.decorators import login_required
+from .serializers import TestStatusSerializer,YourModelSerializer
+from rest_framework.permissions import IsAdminUser
 import random
+from django.contrib.auth import authenticate
 from django.utils import timezone
-from datetime import datetime
+from .utils import get_tokens_for_user
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.db import IntegrityError
+from rest_framework_simplejwt.tokens import TokenError
+from django.utils.timezone import localtime
 
-
-# Set up logger
-logger = logging.getLogger(__name__)
-
-# Function to generate JWT tokens
-def get_tokens_for_user(user):
-    refresh = RefreshToken.for_user(user)
-    return {
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-    }
-
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
-    permission_classes = [AllowAny]  # Allow any user (unauthenticated)
+    permission_classes = [AllowAny]
 
-    def post(self, request):
-        """Handles user registration, sends admin approval request, and generates JWT token."""
+    def get(self, request, *args, **kwargs):
+        return Response({
+            'message': 'Register API is working.',
+            'method': 'GET',
+            'usage': 'Send a POST request with username, email, and password to register.',
+            'example': {
+                'username': 'exampleuser',
+                'email': 'example@example.com',
+                'password': 'yourpassword123'
+            }
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
         try:
-            # Extract data from the request
-            data = request.data
-            username = data.get('username')
-            email = data.get('email')
-            password = data.get('password')
+            if not request.body:
+                return Response({
+                    'message': 'Request body is empty',
+                    'help': 'Send JSON data',
+                    'example': {
+                        'username': 'exampleuser',
+                        'email': 'example@example.com',
+                        'password': 'yourpassword123'
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Validate input
-            if not username or not email or not password:
-                return Response({'message': 'Username, email, and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                body_str = request.body.decode('utf-8')
+                data = json.loads(body_str)
+            except json.JSONDecodeError as e:
+                return Response({
+                    'message': 'Invalid JSON format',
+                    'error': str(e)
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            username = data.get('username', '').strip()
+            email = data.get('email', '').strip()
+            password = data.get('password', '').strip()
+
+            missing_fields = []
+            if not username: missing_fields.append('username')
+            if not email: missing_fields.append('email')
+            if not password: missing_fields.append('password')
+
+            if missing_fields:
+                return Response({
+                    'message': 'Missing required fields',
+                    'missing_fields': missing_fields
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             if '@' not in email:
-                return Response({'message': 'Invalid email format.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'message': 'Invalid email format',
+                    'email': email
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if username or email is already taken
             if User.objects.filter(username=username).exists():
-                return Response({'message': 'Username already taken.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'message': 'Username already exists',
+                    'username': username
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             if User.objects.filter(email=email).exists():
-                return Response({'message': 'Email already registered.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'message': 'Email already registered',
+                    'email': email
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Create inactive user
-            hashed_password = make_password(password)
-            user = User(username=username, email=email, password=hashed_password, is_active=False)  
-            user.save()
-
-            # Generate JWT token for new user (we're sending it after registration for easy user identification)
-            tokens = self.get_tokens_for_user(user)
-
-            # Notify admin for approval
-            send_mail(
-                'New User Registration',
-                f'A new user has registered: {username} ({email}). Please approve them.',
-                settings.DEFAULT_FROM_EMAIL,
-                [settings.ADMIN_EMAIL],  
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                is_active=False  # You can change this based on approval logic
             )
 
+            refresh = RefreshToken.for_user(user)
+            tokens = {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+
+            try:
+                send_mail(
+                    'New User Registration',
+                    f'New user registered: {username} ({email})',
+                    settings.DEFAULT_FROM_EMAIL,
+                    [settings.ADMIN_EMAIL],
+                    fail_silently=True
+                )
+            except Exception as e:
+                print(f'Email sending failed: {e}')
+
             return Response({
-                'message': 'Registration successful. Please wait for admin approval.',
-                'access_token': tokens['access'],  # Send JWT access token as part of response
-                'refresh_token': tokens['refresh']  # Send JWT refresh token as part of response
+                'message': 'Registration successful',
+                'user': {
+                    'username': username,
+                    'email': email
+                },
+                'tokens': tokens
             }, status=status.HTTP_201_CREATED)
-        
+
         except Exception as e:
-            logger.error(f"Error during registration: {str(e)}")
-            return Response({'message': 'Something went wrong. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({
+                'message': 'Unexpected error occurred',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def get_tokens_for_user(self, user):
-        """Generate JWT access and refresh tokens."""
-        refresh = RefreshToken.for_user(user)
-        return {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-        }
-
-
+logger = logging.getLogger(__name__)
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request):
-        # Authenticate the user (this is just an example)
-        username = request.data.get('username')
-        password = request.data.get('password')
+    def get(self, request):
+        return Response({
+            "message": "Login API is working.",
+            "method": "GET",
+            "usage": "Send a POST request with username and password to log in.",
+            "example": {
+                "username": "exampleuser",
+                "password": "yourpassword123"
+            }
+        }, status=status.HTTP_200_OK)
 
-        # Validate user credentials (you may want to use Django's built-in authentication system here)
+    def post(self, request):
+        username = request.data.get("username")
+        password = request.data.get("password")
+
         user = authenticate(username=username, password=password)
+
         if user is not None:
-            # Generate JWT token
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
 
-            return Response({"access_token": access_token})
-        return Response({"detail": "Invalid credentials"}, status=400)
-@api_view(['POST'])
-def approve_user(request):
-    """ Admin approves user and activates their account. """
-    try:
-        user_id = request.data.get('user_id')
-        user = User.objects.filter(id=user_id).first()
-
-        if not user:
-            return Response({'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        if user.is_active:
-            return Response({'message': 'User is already approved.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Activate user
-        user.is_active = True
-        user.save()
-
-        # Notify user
-        send_mail(
-            'Account Approved',
-            f'Hello {user.username},\n\nYour account has been approved. You can now log in.',
-            settings.DEFAULT_FROM_EMAIL,
-            [user.email],
-        )
-
-        return Response({'message': 'User approved and notified via email.'}, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        logger.error(f"Error approving user: {str(e)}")
-        return Response({'message': 'Something went wrong. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "access_token": access_token,
+                    "refresh_token": refresh_token
+                }, 
+                status=status.HTTP_200_OK
+            )
+        
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
 
 class GetQuestionsView(View):
     def get(self, request, level_id, section_id, *args, **kwargs):
         # Fetch the questions based on level and section
-        questions = AbacusTest.objects.filter(level=level_id, section=section_id)
+        questions = list(AbacusTest.objects.filter(level=level_id, section=section_id))
+        random.shuffle(questions)
 
         # Prepare data to return
         questions_data = [{"id": question.id, "question_text": question.question_text} for question in questions]
 
         return JsonResponse({"questions": questions_data}, status=200)
+
 @method_decorator(csrf_exempt, name='dispatch')
 class SubmitAnswersView(View):
+    def get(self, request, level_id, section_id, *args, **kwargs):
+        return JsonResponse({
+            "message": "SubmitAnswersView endpoint is working.",
+            "method": "GET",
+            "usage": "Send a POST request to submit answers for evaluation.",
+            "required_fields": {
+                "answers": {
+                    "format": {
+                        "question_id_1": "your_answer_1",
+                        "question_id_2": "your_answer_2"
+                    }
+                }
+            },
+            "example_post_body": {
+                "answers": {
+                    "12": "32",
+                    "13": "15"
+                }
+            },
+            "endpoint": f"/api/submit-answers/{level_id}/{section_id}/"
+        }, status=200)
+
     def post(self, request, level_id, section_id, *args, **kwargs):
         try:
-            # Parse the JSON request body
             data = json.loads(request.body)
-
-            answers = data.get('answers')  # Extract 'answers' dictionary
-            total_score = data.get('total_score', 0)  # Extract 'total_score' (for section completion)
+            answers = data.get('answers', {})
 
             if not answers:
                 return JsonResponse({"error": "No answers provided."}, status=400)
 
             correct_count = 0
-            incorrect_answers = {}  # Stores question IDs with their correct answers
-            correct_answers = {}  # Stores correct answers mapped by question ID
+            incorrect_answers = {}
+            correct_answers = {}
 
-            # Validate submitted answers
-            for question_id, user_answer in answers.items():
-                try:
-                    # Fetch question for the given level and section
-                    question = AbacusTest.objects.get(id=question_id, level=level_id, section=section_id)
-                    # Compare answer
-                    if str(question.correct_answer) == str(user_answer).strip():
-                        correct_count += 1
-                    else:
-                        # Store incorrect answers with their correct values
-                        incorrect_answers[question_id] = question.correct_answer
-                        correct_answers[question_id] = question.correct_answer  # Mapping the correct answers
-                except AbacusTest.DoesNotExist:
-                    continue  # Ignore missing questions (if any)
+            questions = AbacusTest.objects.filter(level=level_id, section=section_id)
+            total_questions = questions.count()
 
-            # Calculate score (correct_count/total_questions)
-            total_questions = len(answers)
+            for question in questions:
+                question_id = str(question.id)
+                user_answer = answers.get(question_id, "").strip()
+                if user_answer == str(question.correct_answer).strip():
+                    correct_count += 1
+                else:
+                    incorrect_answers[question_id] = user_answer
+                    correct_answers[question_id] = question.correct_answer
+
             score = f"{correct_count}/{total_questions}"
 
-            # Logic for Section 2: Calculate the total score and move to the next level
             if section_id == 2:
-                total_score += correct_count  # Combine total score from Section 1 and Section 2
                 return JsonResponse({
                     "score": score,
-                    "total_score": total_score,
+                    "total_score": correct_count,
                     "incorrect_answers": incorrect_answers,
                     "correct_answers": correct_answers,
-                    "move_to_next_level": True,  # Indicate transition to next level
+                    "move_to_next_level": True,
                 }, status=200)
 
-            # Logic for Section 1: Move to Section 2
-            if section_id == 1:
-                return JsonResponse({
-                    "score": score,
-                    "incorrect_answers": incorrect_answers,
-                    "correct_answers": correct_answers,
-                    "move_to_next_section": True,  # Indicate transition to next section
-                }, status=200)
-
-            return JsonResponse({"error": "Invalid section or level."}, status=400)
+            return JsonResponse({
+                "score": score,
+                "total_score": correct_count,
+                "incorrect_answers": incorrect_answers,
+                "correct_answers": correct_answers,
+                "move_to_next_section": True,
+            }, status=200)
 
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON format."}, status=400)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
-class PracticeSessionView(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        """Retrieve the user's practice session details."""
+
+class Get_random_questions(View):
+    def get(self, request, level_id, section_id, *args, **kwargs):
+        # Filter questions based on level and section
+        questions = list(session.objects.filter(level=level_id, section=section_id))
+
+        # Shuffle questions
+        random.shuffle(questions)
+
+        # Pick first 10 questions (or less if total < 10)
+        selected_questions = questions[:10]
+
+        # Get time_limit from first question or default to 600 seconds
+        time_limit = selected_questions[0].time_limit if selected_questions else 600
+
+        # Prepare response data
+        questions_data = [
+            {
+                "id": question.id,
+                "question_text": question.question_text,
+                "correct_answer": question.correct_answer
+            }
+            for question in selected_questions
+        ]
+
+        return JsonResponse({"questions": questions_data, "time_limit": time_limit}, status=200)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class Validate_answer(View):
+    def get(self, request, level_id, section_id, *args, **kwargs):
+        return JsonResponse({
+            "message": "Validate_answer endpoint is working.",
+            "method": "GET",
+            "usage": "Send a POST request to validate answers.",
+            "required_fields": {
+                "answers": {
+                    "format": {
+                        "question_id_1": "your_answer_1",
+                        "question_id_2": "your_answer_2"
+                    }
+                }
+            },
+            "example_post_body": {
+                "answers": {
+                    "101": "25",
+                    "102": "47"
+                }
+            },
+            "endpoint": f"/api/validate-answers/{level_id}/{section_id}/"
+        }, status=200)
+
+    def post(self, request, level_id, section_id, *args, **kwargs):
         try:
-            session = PracticeSession.objects.get(user=request.user)
-            return Response({
-                "session_count": session.session_count,
-                "last_practiced": session.last_practiced
-            }, status=status.HTTP_200_OK)
-        except PracticeSession.DoesNotExist:
-            return Response({"message": "No practice session found!"}, status=status.HTTP_404_NOT_FOUND)
+            data = json.loads(request.body)
+            answers = data.get('answers', {})
 
-    def post(self, request):
-        """Increment session count when the user practices."""
-        session, created = PracticeSession.objects.get_or_create(user=request.user)
-        session.session_count += 1
-        session.save()
+            if not answers:
+                return JsonResponse({"error": "No answers provided."}, status=400)
 
-        return Response({
-            "message": "Practice session updated!",
-            "session_count": session.session_count,
-            "last_practiced": session.last_practiced
-        }, status=status.HTTP_200_OK)
-    
+            correct_count = 0
+            incorrect_answers = {}
+            correct_answers = {}
 
-@api_view(['GET'])
-@permission_classes([AllowAny])  # Allow public access
-def get_random_questions(request, level_id, section_id):
-    """
-    Get random questions for the specified level and section.
-    """
-    questions = list(session.objects.filter(level=level_id, section=section_id))
-    
-    if not questions:
-        return Response({"error": "No questions available for this level and section."}, status=404)
+            # Fetch all questions for this level and section
+            questions = session.objects.filter(level=level_id, section=section_id)
+            total_questions = questions.count()
 
-    random.shuffle(questions)  # Shuffle to get random questions
-    serialized_questions = TestSerializer(questions, many=True)
+            # Validate submitted answers
+            for question in questions:
+                question_id = str(question.id)
+                user_answer = answers.get(question_id, "").strip()
+                if user_answer == str(question.correct_answer).strip():
+                    correct_count += 1
+                else:
+                    incorrect_answers[question_id] = user_answer
+                    correct_answers[question_id] = question.correct_answer
 
-    return Response(serialized_questions.data)
-@api_view(['POST'])
-@permission_classes([AllowAny])  # Allow public access
-def validate_answers(request, level_id, section_id):
-    """
-    Validate the answers submitted by the user for a specific level and section.
-    Return the score based on correct answers.
-    """
-    answers = request.data.get('answers', {})
+            score = f"{correct_count}/{total_questions}"
 
-    if not isinstance(answers, dict):
-        return Response({"error": "Invalid data format. Answers must be a dictionary."}, status=400)
+            if section_id == 2:
+                return JsonResponse({
+                    "score": score,
+                    "total_score": correct_count,
+                    "incorrect_answers": incorrect_answers,
+                    "correct_answers": correct_answers,
+                    "move_to_next_level": True,
+                }, status=200)
 
-    questions = AbacusTest.objects.filter(level=level_id, section=section_id)
-    score = 0
-    incorrect_answers = []
-    correct_answers = {}
+            return JsonResponse({
+                "score": score,
+                "total_score": correct_count,
+                "incorrect_answers": incorrect_answers,
+                "correct_answers": correct_answers,
+                "move_to_next_section": True,
+            }, status=200)
 
-    for question in questions:
-        user_answer = answers.get(str(question.id), "").strip().lower()
-        if user_answer == question.correct_answer.strip().lower():
-            score += 1
-        else:
-            incorrect_answers.append(question.id)
-            correct_answers[question.id] = question.correct_answer
-
-    # Logic to determine whether to move to the next section or level
-    move_to_next_section = False
-    move_to_next_level = False
-
-    # Threshold for section completion
-    if score >= 7:  # Threshold for moving to the next section (out of 10 questions)
-        move_to_next_section = True
-
-    # Check for the last level (Level 3)
-    if level_id == 3 and score >= 14:  # Example condition: score 14/20 to move to next level
-        move_to_next_level = True
-
-    # Return the score for the current section and check if we can move to the next level or section
-    return Response({
-        "score": score,
-        "incorrect_answers": incorrect_answers,
-        "correct_answers": correct_answers,
-        "move_to_next_section": move_to_next_section,
-        "move_to_next_level": move_to_next_level
-    })
-
-
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON format."}, status=400)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow public access
 def get_test_notification(request):
     """
-    Get the test notification message and start time with a countdown.
+    Get the test notification message and compare the scheduled time with the system time.
     """
     # Fetch the latest active notification
     notification = TestNotification.objects.filter(is_active=True).last()
@@ -319,31 +373,221 @@ def get_test_notification(request):
     if not notification:
         return Response({"error": "No active test notification found."}, status=status.HTTP_404_NOT_FOUND)
 
-    # Get current time (timezone-aware)
-    now = timezone.now()
+    # Convert the scheduled test time to local time
+    notification_time = localtime(notification.start_date)
 
-    # Get the start date from the TestNotification model
-    test_start_time = notification.start_date
+    # Format date as "dd.mm.yyyy"
+    formatted_date = notification_time.strftime("%d.%m.%Y")
 
-    
+    # Format time as "hh:mm AM/PM"
+    formatted_time = notification_time.strftime("%I:%M %p")  # 12-hour format
 
-    # Compare current time with test start time
-    if now < test_start_time:
-        # Calculate remaining time until the test starts
-        time_remaining = (test_start_time - now).total_seconds()
-        minutes_remaining = int(time_remaining // 60)
-        seconds_remaining = int(time_remaining % 60)
+    # Compare scheduled test time with current system time
+    current_time = localtime().strftime("%Y-%m-%d %H:%M:%S")
+    notification_time_str = notification_time.strftime("%Y-%m-%d %H:%M:%S")
 
-        return Response({
-            "message": notification.message,
-            "start_time": test_start_time.isoformat(),  # Convert to ISO format for frontend
-            "start_message": f"Test will start in {minutes_remaining} minutes and {seconds_remaining} seconds.",
-            "time_remaining_seconds": time_remaining  # Useful for frontend countdown
-        }, status=status.HTTP_200_OK)
-    
-    # If the test has started, allow access
+    is_time_reached = notification_time_str <= current_time
+
     return Response({
         "message": notification.message,
-        "start_time": test_start_time.isoformat(),
-        "start_message": "Test is now available!"
+        "formatted_date": formatted_date,
+        "formatted_time": formatted_time,
+        "is_time_reached": is_time_reached  # Boolean flag to start the test automatically
     }, status=status.HTTP_200_OK)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
+def practice_session(request):
+    user = request.user
+    print(f"Authenticated User: {user}")
+
+    if request.method == 'GET':
+        try:
+            # Get or create the UserAttempt object
+            user_attempt, created = UserAttempt.objects.get_or_create(user=user)
+            
+            # Fetch all past practice attempt details
+            attempt_details = AttemptDetail.objects.filter(user_attempt=user_attempt, attempt_type="Practice")
+
+            details_list = []
+            for attempt in attempt_details:
+                details_list.append({
+                    "score": attempt.score,
+                    "total_questions": attempt.total_questions,
+                    "timestamp": attempt.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                })
+
+            return Response({
+                "message": "Practice session summary fetched successfully.",
+                "practice_count": user_attempt.practice_count,
+                "attempts": details_list
+            }, status=200)
+
+        except Exception as e:
+            print(f"GET Error: {e}")
+            return Response({"error": "Failed to fetch practice session details."}, status=500)
+
+    elif request.method == 'POST':
+        try:
+            score = request.data.get('score')
+            total_questions = request.data.get('total_questions', 0)
+
+            if score is None or total_questions == 0:
+                return Response({"error": "Missing required data: score and total_questions."}, status=400)
+
+            user_attempt, created = UserAttempt.objects.get_or_create(user=user)
+            user_attempt.practice_count += 1
+            user_attempt.save()
+
+            attempt_detail = AttemptDetail.objects.create(
+                user_attempt=user_attempt,
+                attempt_type="Practice",
+                score=score,
+                total_questions=total_questions
+            )
+
+            return Response({
+                "message": "Practice session recorded successfully.",
+                "score": f"{score}/{total_questions}",
+                "attempt_detail_id": attempt_detail.id
+            }, status=201)
+
+        except IntegrityError as e:
+            print(f"Integrity Error: {e}")
+            return Response({"error": "Database error occurred while processing your request."}, status=500)
+        except Exception as e:
+            print(f"POST Error: {e}")
+            return Response({"error": "An error occurred while processing your request."}, status=500)
+
+    else:
+        return Response({"error": "Unsupported request method."}, status=405)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])  # Ensure only authenticated users can access this view
+def test_session(request):
+    user = request.user
+    print(f"Authenticated User: {user}")
+
+    if request.method == 'GET':
+        try:
+            # Get or create the UserAttempt object
+            user_attempt, created = UserAttempt.objects.get_or_create(user=user)
+            
+            # Fetch all past test attempt details
+            attempt_details = AttemptDetail.objects.filter(user_attempt=user_attempt, attempt_type="Test")
+
+            details_list = []
+            for attempt in attempt_details:
+                details_list.append({
+                    "score": attempt.score,
+                    "total_questions": attempt.total_questions,
+                    "timestamp": attempt.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                })
+
+            return Response({
+                "message": "Test session summary fetched successfully.",
+                "test_count": user_attempt.test_count,
+                "attempts": details_list
+            }, status=200)
+
+        except Exception as e:
+            print(f"GET Error: {e}")
+            return Response({"error": "Failed to fetch test session details."}, status=500)
+
+    elif request.method == 'POST':
+        try:
+            score = request.data.get('score')
+            total_questions = request.data.get('total_questions', 0)
+
+            if score is None or total_questions == 0:
+                return Response({"error": "Missing required data: score and total_questions."}, status=400)
+
+            user_attempt, created = UserAttempt.objects.get_or_create(user=user)
+            user_attempt.test_count += 1
+            user_attempt.save()
+
+            attempt_detail = AttemptDetail.objects.create(
+                user_attempt=user_attempt,
+                attempt_type="Test",
+                score=score,
+                total_questions=total_questions
+            )
+
+            return Response({
+                "message": "Test session recorded successfully.",
+                "score": f"{score}/{total_questions}",
+                "attempt_detail_id": attempt_detail.id
+            }, status=201)
+
+        except IntegrityError as e:
+            print(f"Integrity Error: {e}")
+            return Response({"error": "Database error occurred while processing your request."}, status=500)
+        except Exception as e:
+            print(f"POST Error: {e}")
+            return Response({"error": "An error occurred while processing your request."}, status=500)
+
+    else:
+        return Response({"error": "Unsupported request method."}, status=405)
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        return self.logout_user(request)
+
+    def get(self, request):
+        return self.logout_user(request)
+
+    def logout_user(self, request):
+        try:
+            logger.info(f"Logout attempt - User: {request.user}")
+            refresh_token = request.data.get('refresh') if request.method == 'POST' else request.query_params.get('refresh')
+
+            if not refresh_token:
+                logger.warning("No refresh token provided")
+                return Response(
+                    {"error": "Refresh token is required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+                logger.info("Token blacklisted successfully")
+            except TokenError as e:
+                logger.warning(f"Token error: {e}")
+            except Exception as e:
+                logger.error(f"Token blacklist error: {e}")
+
+            request.session.flush()
+            return Response(
+                {"message": "Successfully logged out"}, 
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            logger.error(f"Logout error: {e}")
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+@api_view(['GET'])
+def check_test_status(request):
+    try:
+        test_status, created = TestStatus.objects.get_or_create(id=1)
+        serializer = TestStatusSerializer(test_status)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+    
+
+class YourModelView(APIView):
+    def get(self, request):
+        queryset = YourModel.objects.all()
+        serializer = YourModelSerializer(queryset, many=True)
+        return Response(serializer.data)
+    
+def home(request):
+    return HttpResponse("Welcome to Abacus Online Test Portal")

@@ -16,6 +16,10 @@ from django.contrib.auth.models import AbstractUser
 from django.core.mail import send_mail
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.utils.timezone import now
+from django.utils.timezone import localtime
+
+
 
 
 
@@ -49,19 +53,23 @@ class AbacusTest(models.Model):
     section = models.IntegerField(choices=SECTION_CHOICES)
     question_text = models.CharField(max_length=100)
     correct_answer = models.CharField(max_length=10)
-
-    def __str__(self):
-        return f"Level {self.level}, Section {self.section} - {self.question_text}"
-    
-class PracticeSession(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    session_count = models.PositiveIntegerField(default=0)  # Counts practice attempts
-    last_practiced = models.DateTimeField(auto_now=True)  # Stores last practice time
-
    
 
     def __str__(self):
-        return f"{self.user.username} - {self.session_count} times"
+        return f"Level {self.level}, Section {self.section} - {self.question_text}"
+class TestNotification(models.Model):
+    message = models.TextField()
+    start_date = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Test Notification: {self.message}"
+
+
+
+
+
 
 
 class session(models.Model):
@@ -72,18 +80,51 @@ class session(models.Model):
     section = models.IntegerField(choices=SECTION_CHOICES)
     question_text = models.CharField(max_length=100)
     correct_answer = models.CharField(max_length=10)
-    time_limit = models.IntegerField(help_text="Time limit in seconds")  # Time limit for each question
+    time_limit = models.IntegerField()    # Time limit for each question
 
     def __str__(self):
         return f"Level {self.level}, Section {self.section} - {self.question_text} (Time Limit: {self.time_limit}s)"
 
 
 
-class TestNotification(models.Model):
-    message = models.TextField()
-    start_date = models.DateTimeField()
-    is_active = models.BooleanField(default=True)
-    is_active = models.BooleanField(default=True)
+
+class UserAttempt(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)  # One user, one attempt summary
+    practice_count = models.PositiveIntegerField(default=0)
+    test_count = models.PositiveIntegerField(default=0)
 
     def __str__(self):
-        return f"Test Notification: {self.message}"
+        return f"{self.user.username} - Practice: {self.practice_count}, Test: {self.test_count}"
+
+class AttemptDetail(models.Model):
+    user_attempt = models.ForeignKey(UserAttempt, on_delete=models.CASCADE)
+    attempt_type = models.CharField(max_length=20)
+    score = models.IntegerField(default=0)  # Default score value
+    total_questions = models.IntegerField(default=0)  # Add default value here
+
+    def __str__(self):
+        return f"Attempt by {self.user_attempt.user.username} - {self.attempt_type}"
+
+
+
+class UserLogoutLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    logout_time = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"User: {self.user.username} logged out at {self.logout_time}"
+
+
+class TestStatus(models.Model):
+    is_test_posted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return "Test is posted" if self.is_test_posted else "Test is not posted"
+
+
+class YourModel(models.Model):
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name

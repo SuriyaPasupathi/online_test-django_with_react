@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
     const [username, setUsername] = useState('');
@@ -6,26 +7,29 @@ const Login = () => {
     const [errorMessage, setErrorMessage] = useState('');
     const [loading, setLoading] = useState(false);
 
+    const navigate = useNavigate();
+
     const handleLogin = async (event) => {
         event.preventDefault();
         setLoading(true);
         setErrorMessage('');
 
         try {
-            // Replacing axios with fetch
             const response = await fetch('http://127.0.0.1:8000/api/login/', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),
             });
 
             const data = await response.json();
+
             if (response.status === 200 && data.access_token) {
+                // Save tokens directly
                 localStorage.setItem('access_token', data.access_token);
                 localStorage.setItem('refresh_token', data.refresh_token);
-                window.location.href = '/Home'; // Redirect to home page
+
+                // Navigate to Home page
+                navigate('/Home');
             } else {
                 setErrorMessage(data.message || 'Invalid credentials.');
             }
@@ -44,7 +48,9 @@ const Login = () => {
                 </h2>
                 <form onSubmit={handleLogin}>
                     <div className="mb-6">
-                        <label htmlFor="username" className="block text-lg text-gray-600">Username</label>
+                        <label htmlFor="username" className="block text-lg text-gray-600">
+                            Username
+                        </label>
                         <input
                             type="text"
                             id="username"
@@ -56,7 +62,9 @@ const Login = () => {
                         />
                     </div>
                     <div className="mb-6">
-                        <label htmlFor="password" className="block text-lg text-gray-600">Password</label>
+                        <label htmlFor="password" className="block text-lg text-gray-600">
+                            Password
+                        </label>
                         <input
                             type="password"
                             id="password"

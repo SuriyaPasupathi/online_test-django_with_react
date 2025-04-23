@@ -1,169 +1,230 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 const TestQuestion = () => {
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
-    const [sectionScore, setSectionScore] = useState(null); // Track score for each section
-    const [totalLevelScore, setTotalLevelScore] = useState(0); // Track cumulative score for each level
-    const [incorrectAnswers, setIncorrectAnswers] = useState([]);
+    const [incorrectAnswers, setIncorrectAnswers] = useState({});
     const [correctAnswers, setCorrectAnswers] = useState({});
     const [level, setLevel] = useState(1);
     const [section, setSection] = useState(1);
     const [testCompleted, setTestCompleted] = useState(false);
-    const [testAvailable, setTestAvailable] = useState(false);
-    const [notificationMessage, setNotificationMessage] = useState("");
-    const [startTime, setStartTime] = useState("");
-    const [timeRemaining, setTimeRemaining] = useState(0);
-    const timerRef = useRef(null); // Reference for interval
+    const [totalQuestions, setTotalQuestions] = useState(0);
+    const [totalIncorrect, setTotalIncorrect] = useState(0);
+    const [testTimer, setTestTimer] = useState(null);
+    const [isTestRunning, setIsTestRunning] = useState(false);
+    const [finalScore, setFinalScore] = useState(0);
+    const [testStarted, setTestStarted] = useState(false);
+    const [errorMessage, setErrorMessage] = useState("");
 
+    // Fetch new questions when test starts or level/section changes
     useEffect(() => {
-        fetchNotification();
-    }, []);
-
-    useEffect(() => {
-        if (testAvailable) {
+        if (testStarted) {
             fetchQuestions();
         }
-    }, [testAvailable, level, section]);
+    }, [testStarted, level, section]);
 
+    // Submit final score if test is completed
     useEffect(() => {
-        if (timeRemaining > 0) {
-            if (timerRef.current) clearInterval(timerRef.current);
-
-            timerRef.current = setInterval(() => {
-                setTimeRemaining((prevTime) => {
-                    if (prevTime <= 1) {
-                        clearInterval(timerRef.current);
-                        handleSubmit(); // Auto-submit on timeout
-                        return 0;
-                    }
-                    return prevTime - 1;
-                });
-            }, 1000);
-
-            return () => clearInterval(timerRef.current);
-        }
-    }, [timeRemaining]);
-
-    const fetchNotification = () => {
-        axios.get(`http://localhost:8000/api/test_notification/`)
-            .then(response => {
-                const { message, start_time, start_message, time_remaining_seconds } = response.data;
-                setNotificationMessage(message);
-                setStartTime(start_time);
-                setTimeRemaining(time_remaining_seconds);
-
-                if (start_message === "Test is now available!") {
-                    setTestAvailable(true);
+        if (testCompleted) {
+            axios.post("http://localhost:8000/api/test_session/", {
+                score: totalQuestions - totalIncorrect,
+                total_questions: totalQuestions,
+            }, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("access_token")}`
                 }
             })
-            .catch(error => console.error("Error fetching test notification:", error));
+            .then((response) => {
+                console.log("Test session recorded:", response.data);
+            })
+            .catch((error) => {
+                console.error("Error submitting test session:", error);
+            });
+        }
+    }, [testCompleted]);
+
+    // Timer countdown
+    useEffect(() => {
+        if (testTimer !== null && testTimer > 0) {
+            const timerInterval = setInterval(() => {
+                setTestTimer((prev) => {
+                    if (prev <= 1) {
+                        clearInterval(timerInterval);
+                        handleSubmit(); // Auto-submit when time ends
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timerInterval);
+        }
+    }, [testTimer]);
+
+    // Start test only if test is posted by admin
+    const handleStartTest = () => {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+            setErrorMessage("Please log in to start the test.");
+            return;
+        }
+
+        axios.get("http://localhost:8000/api/test_status/", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        })
+        .then((response) => {
+            if (response.data.is_test_posted) {
+                setTestStarted(true);
+                setErrorMessage("");
+            } else {
+                setErrorMessage("Test cannot be started. It has not been posted by the admin yet.");
+            }
+        })
+        .catch((error) => {
+            setErrorMessage("Error checking test status. Please try again.");
+            console.error("Error checking test status:", error);
+        });
     };
 
+    // Fetch questions for current level and section
     const fetchQuestions = () => {
-        axios.get(`http://localhost:8000/api/random_question/${level}/${section}/`)
-            .then(response => setQuestions(response.data))
-            .catch(error => console.error("Error fetching questions:", error));
+        axios.get(`http://localhost:8000/api/random_questions/${level}/${section}/`)
+        .then((response) => {
+            if (response.data.questions && response.data.questions.length > 0) {
+                setQuestions(response.data.questions);
+                setAnswers({});
+                setIncorrectAnswers({});
+                setCorrectAnswers({});
+                setErrorMessage("");
+
+                if (level === 1 && section === 1) {
+                    setTotalQuestions(0);
+                    setTotalIncorrect(0);
+                }
+
+                setTotalQuestions((prev) => prev + response.data.questions.length);
+                setTestTimer(response.data.time_limit);
+                setIsTestRunning(true);
+            } else {
+                setErrorMessage("Failed to load questions. Please try again.");
+            }
+        })
+        .catch((error) => {
+            setErrorMessage("An error occurred while fetching questions.");
+            console.error("Error fetching questions:", error);
+        });
     };
 
+    // Handle user input
     const handleAnswerChange = (questionId, value) => {
-        setAnswers(prevAnswers => ({
-            ...prevAnswers,
-            [questionId]: value
+        setAnswers((prev) => ({
+            ...prev,
+            [questionId]: value,
         }));
     };
 
+    // Submit answers and auto-transition to next section or level
     const handleSubmit = () => {
-        axios.post(
-            `http://localhost:8000/api/validate_answers/${level}/${section}/`,
-            { answers },
-            { headers: { "Content-Type": "application/json" } }
-        )
+        axios.post(`http://localhost:8000/api/validate_answers/${level}/${section}/`, { answers })
         .then((response) => {
-            const { score, incorrect_answers, correct_answers, move_to_next_section, move_to_next_level } = response.data;
-            
-            setSectionScore(score); // Set section score
-            setTotalLevelScore(prev => prev + score); // Update total score for level
+            const { incorrect_answers, correct_answers } = response.data;
             setIncorrectAnswers(incorrect_answers);
             setCorrectAnswers(correct_answers);
 
-            if (move_to_next_section) {
-                setTimeout(() => setSection(prev => prev + 1), 2000);
-            } else if (move_to_next_level) {
-                setTimeout(() => {
-                    setLevel(prev => prev + 1);
+            const incorrectCount = Object.keys(incorrect_answers).length;
+            setTotalIncorrect((prev) => prev + incorrectCount);
+
+            if (level === 3 && section === 2) {
+                const finalScore = totalQuestions - (totalIncorrect + incorrectCount);
+                setFinalScore(finalScore);
+                setTestCompleted(true);
+                alert(`Your final score is: ${finalScore}/${totalQuestions}`);
+            } else {
+                if (section === 1) {
+                    setSection(2); // Auto-move to Section 2
+                } else if (section === 2) {
+                    setLevel((prev) => prev + 1); // Move to next level
                     setSection(1);
-                }, 3000);
-            } else if (level === 3 && section === 3) {
-                setTestCompleted(true); // Mark test as completed after level 3, section 3
+                }
             }
         })
-        .catch((error) => console.error("Error submitting answers:", error.response?.data || error));
+        .catch((error) => console.error("Error submitting answers:", error));
     };
 
-    const formatTime = (seconds) => {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
-        return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    // Reset everything
+    const handleBack = () => {
+        setTestCompleted(false);
+        setLevel(1);
+        setSection(1);
+        setTotalQuestions(0);
+        setTotalIncorrect(0);
+        setTestStarted(false);
     };
 
     return (
         <div className="container mx-auto p-4">
             <h1 className="text-2xl font-bold mb-4 text-center">Abacus Test</h1>
 
-            <div className="text-center">
-                {testAvailable ? (
-                    <p className="text-green-600 text-lg font-semibold">Test is now available!</p>
-                ) : (
-                    <p className="text-red-600 text-lg font-semibold">{notificationMessage}</p>
-                )}
-                {testAvailable && (
-                    <>
-                        <p>Start time: {new Date(startTime).toLocaleString()}</p>
-                        <p>Time Remaining: {formatTime(timeRemaining)}</p>
-                    </>
-                )}
-            </div>
-
-            {testAvailable && (
-                <>
-                    {testCompleted ? (
-                        <div className="p-6 border rounded shadow bg-gray-100 text-center">
-                            <h2 className="text-xl font-bold">Test Completed</h2>
-                            <p className="text-lg text-green-600">Final Score for Level {level}: {totalLevelScore}</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <h2 className="text-xl font-semibold text-center">Level {level} - Section {section}</h2>
-                            {questions.map((question) => (
-                                <div key={question.id} className="p-4 border rounded shadow">
-                                    <p className="text-lg font-semibold">{question.question_text}</p>
-                                    <input
-                                        type="text"
-                                        onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                                        value={answers[question.id] || ""}
-                                        className="border p-2 w-full mt-2 rounded"
-                                        placeholder="Enter your answer"
-                                    />
-                                </div>
-                            ))}
-                            <button
-                                onClick={handleSubmit}
-                                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
-                            >
-                                Submit {section === 1 ? "Section 1" : "Section 2"}
-                            </button>
-
-                            {sectionScore !== null && (
-                                <div className="mt-4 p-4 border rounded shadow bg-gray-100 text-center">
-                                    <p className="text-lg font-semibold">Section Score: {sectionScore}</p>
-                                    <p className="text-lg font-semibold">Total Score for Level {level}: {totalLevelScore}</p>
-                                </div>
-                            )}
+            {!testStarted ? (
+                <div className="text-center">
+                    <button
+                        onClick={handleStartTest}
+                        className="bg-blue-500 text-white px-6 py-2 rounded mt-4"
+                    >
+                        Start Test
+                    </button>
+                    {errorMessage && (
+                        <div className="text-center text-red-600 font-semibold mt-4">{errorMessage}</div>
+                    )}
+                </div>
+            ) : !testCompleted ? (
+                <div>
+                    <h2 className="text-xl font-semibold text-center">
+                        Level {level} - Section {section}
+                    </h2>
+                    {testTimer !== null && (
+                        <div className="text-center text-red-600 font-bold mt-2">
+                            Time Left: {Math.floor(testTimer / 60)}:{testTimer % 60 < 10 ? "0" : ""}{testTimer % 60} min
                         </div>
                     )}
-                </>
+
+                    {questions.map((question, index) => (
+                        <div key={question.id} className="p-4 border rounded shadow mt-4">
+                            <p className="text-lg font-semibold">{index + 1}. {question.question_text}</p>
+                            <input
+                                type="text"
+                                onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                                value={answers[question.id] || ""}
+                                className="border p-2 w-full mt-2 rounded"
+                                placeholder="Enter your answer"
+                            />
+                            {incorrectAnswers[question.id] && (
+                                <p className="text-red-600 mt-2">Incorrect. Correct Answer: {correctAnswers[question.id]}</p>
+                            )}
+                        </div>
+                    ))}
+
+                    <button
+                        onClick={handleSubmit}
+                        className="bg-blue-500 text-white px-4 py-2 rounded mt-6 block mx-auto"
+                    >
+                        Submit Section {section}
+                    </button>
+                </div>
+            ) : (
+                <div className="p-6 border rounded shadow bg-gray-100 text-center">
+                    <h2 className="text-xl font-bold">Test Completed</h2>
+                    <p className="text-lg text-green-600">
+                        Final Score: {finalScore}/{totalQuestions}
+                    </p>
+                    <button
+                        onClick={handleBack}
+                        className="mt-4 bg-gray-500 text-white px-4 py-2 rounded"
+                    >
+                        Back
+                    </button>
+                </div>
             )}
         </div>
     );

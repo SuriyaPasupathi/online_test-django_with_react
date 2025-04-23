@@ -1,10 +1,9 @@
 from django.contrib import admin
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User,AbacusTest,PracticeSession,session,TestNotification
-
-
-
+from .models import User,AbacusTest,session,TestNotification,UserAttempt, AttemptDetail,TestStatus
+from django.db.models import Sum
+from django.utils.formats import date_format
 
 class UserAdmin(admin.ModelAdmin):
     list_display = ('username', 'email', 'is_registered', 'is_approved')
@@ -40,42 +39,52 @@ admin.site.register(User, UserAdmin)
 
 @admin.register(AbacusTest)
 class AbacusTestAdmin(admin.ModelAdmin):
-    list_display = ('level', 'section', 'question_text', 'correct_answer')
+    list_display = ('level', 'section', 'question_text', 'correct_answer')  # Added score field
     list_filter = ('level', 'section')
     search_fields = ('question_text',)
-
-
-class PracticeSessionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'session_count', 'last_practiced')
-    readonly_fields = ('user', 'session_count', 'last_practiced')
-    search_fields = ('user__username',)
-
-    def has_change_permission(self, request, obj=None):
-        return False  # Prevent modifications
-
-    def has_delete_permission(self, request, obj=None):
-        return False  # Prevent deletion
-
-admin.site.register(PracticeSession, PracticeSessionAdmin)
-
-
-# Register the admin class
-
-
-
-
 
 # Unregister if the model is already registered
 class sessionAdmin(admin.ModelAdmin):
     list_display = ('level', 'section', 'question_text', 'time_limit', 'correct_answer')
     search_fields = ('question_text', 'level', 'section')
+    list_editable = ('time_limit',)
 
 admin.site.register(session, sessionAdmin)
-
 class TestNotificationAdmin(admin.ModelAdmin):
-    list_display = ('message', 'start_date', 'is_active')
+    list_display = ('message', 'start_date', 'start_time_display', 'is_active')
     list_filter = ('is_active',)
     search_fields = ('message',)
-    date_hierarchy = 'start_date'  # Allows you to filter by date
+    date_hierarchy = 'start_date'
+
+    def start_time_display(self, obj):
+        """Displays time in AM/PM format in the admin panel."""
+        return date_format(obj.start_date, "h:i A")  # 12-hour format with AM/PM
+    start_time_display.short_description = "Start Time"
 
 admin.site.register(TestNotification, TestNotificationAdmin)
+class AttemptDetailInline(admin.TabularInline):
+    model = AttemptDetail
+    extra = 0  # Don't show empty forms
+    
+class UserAttemptAdmin(admin.ModelAdmin):
+    list_display = ('user', 'practice_count', 'test_count', 'total_score')
+    readonly_fields = ('user', 'practice_count', 'test_count', 'total_score')
+
+    def total_score(self, obj):
+        # Sum the scores from related AttemptDetails
+        total = AttemptDetail.objects.filter(user_attempt=obj).aggregate(total_score=Sum('score'))['total_score']
+        return total if total else 0
+    total_score.short_description = 'Total Score'
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:  # Make the score fields readonly only when the object already exists
+            return self.readonly_fields + ('total_score',)
+        return self.readonly_fields
+
+    inlines = [AttemptDetailInline]  # Show attempts as an inline table
+    search_fields = ('user__username',)
+
+# Register the custom admin class
+admin.site.register(UserAttempt, UserAttemptAdmin)
+
+admin.site.register(TestStatus)
